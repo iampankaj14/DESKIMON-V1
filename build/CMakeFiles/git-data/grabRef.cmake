@@ -18,7 +18,7 @@ set(HEAD_HASH)
 file(READ "/Users/pankaj/Desktop/DESKIMON/build/CMakeFiles/git-data/HEAD" HEAD_CONTENTS LIMIT 1024)
 
 string(STRIP "${HEAD_CONTENTS}" HEAD_CONTENTS)
-set(GIT_DIR "/Users/pankaj/Downloads/ESP32-S3-Touch-LCD-1.46-main/example/ESP-IDF-5.3.2/ESP32-S3-Touch-LCD-1.46-Test/esp-idf-v5.3.2/.git")
+set(GIT_DIR "/Users/pankaj/Desktop/DESKIMON/.git")
 # handle git-worktree
 if(EXISTS "${GIT_DIR}/commondir")
 	file(READ "${GIT_DIR}/commondir" GIT_DIR_NEW LIMIT 1024)

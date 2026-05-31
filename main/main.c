@@ -4,13 +4,11 @@
 #include "SD_MMC.h"
 #include "Wireless.h"
 #include "TCA9554PWR.h"
-#include "LVGL_Example.h"
+#include "deskimon.h"
 #include "BAT_Driver.h"
 #include "PWR_Key.h"
 #include "PCM5101.h"
 #include "MIC_Speech.h"
-
-extern const lv_img_dsc_t left_eye;
 
 void Driver_Loop(void *parameter)
 {
@@ -51,18 +49,11 @@ void app_main(void)
     LCD_Init();
     Audio_Init();
     MIC_Speech_init();
-    // Play_Music("/sdcard","AAA.mp3");
+    //Play_Music("/sdcard","udi.mp3");
     LVGL_Init();
 
-    /********************* Demo *********************/
-    Lvgl_Example1();
-    // lv_demo_widgets();
-    // lv_demo_keypad_encoder();
-    // lv_demo_benchmark();
-    // lv_demo_stress();
-    // lv_demo_music();
-
-   // ui_init();
+    // Start the Deskimon Interface
+    Deskimon_Start();
 
     while (1) {
         // raise the task priority of LVGL and/or reduce the handler period can improve the performance

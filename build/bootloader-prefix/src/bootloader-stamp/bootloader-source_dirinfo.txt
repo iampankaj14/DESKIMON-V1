@@ -4,6 +4,6 @@
 
 method=source_dir
 command=
-source_dir=/Users/pankaj/Downloads/ESP32-S3-Touch-LCD-1.46-main/example/ESP-IDF-5.3.2/ESP32-S3-Touch-LCD-1.46-Test/esp-idf-v5.3.2/components/bootloader/subproject
+source_dir=/Users/pankaj/.espressif/v5.3.2/esp-idf/components/bootloader/subproject
 work_dir=
 

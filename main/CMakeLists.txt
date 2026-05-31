@@ -8,8 +8,7 @@ idf_component_register(
                               "./LCD_Driver/Display_SPD2010.c"     
                               "./Touch_Driver/Touch_SPD2010.c"  
                               "./LVGL_Driver/LVGL_Driver.c"
-                              "./LVGL_UI/LVGL_Example.c"
-                              "./LVGL_UI/LVGL_Music.c"
+                              "./LVGL_UI/deskimon.c"
                               "./SD_Card/SD_MMC.c" 
                               "./I2C_Driver/I2C_Driver.c"
                               "./PCF85063/PCF85063.c"
@@ -17,7 +16,6 @@ idf_component_register(
                               "./BAT_Driver/BAT_Driver.c"
                               "./PWR_Key/PWR_Key.c"
                               "./Wireless/Wireless.c"
-                              "./assets/left_eye.c"
 
                          INCLUDE_DIRS 
                               "./Audio_Driver" 

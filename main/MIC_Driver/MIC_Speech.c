@@ -170,10 +170,8 @@ static void detect_hander(AppSpeech *self)
                 LCD_Backlight = LCD_Backlight_original;
                 if(play_Music_Flag){
                     play_Music_Flag = 0;
-                    if(ACTIVE_TRACK_CNT)
-                    _lv_demo_music_resume();   
-                    else
-                    printf("No MP3 file found in SD card!\r\n");    
+                    // Play_Music("/sdcard", "udi.mp3"); // Driver-level playback instead of UI demo
+                    printf("Music playback requested by voice command.\n");
                 }
             }
         }

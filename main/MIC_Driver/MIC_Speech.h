@@ -4,7 +4,6 @@
 #include "esp_process_sdkconfig.h"
 #include "model_path.h"
 #include "Display_SPD2010.h"
-#include "LVGL_Music.h"
 
 #define I2S_CONFIG_DEFAULT(sample_rate, channel_fmt, bits_per_chan) { \
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate), \
