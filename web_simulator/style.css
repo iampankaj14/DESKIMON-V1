@@ -1,0 +1,529 @@
+/* CSS Variables for Premium Styling */
+:root {
+    --bg-primary: #0a0c10;
+    --bg-secondary: #121620;
+    --bg-card: rgba(18, 22, 32, 0.65);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --text-primary: #f0f4f8;
+    --text-muted: #8fa0b0;
+    --accent-color: #18d7e8;
+    --accent-glow: rgba(24, 215, 232, 0.4);
+    
+    /* Dynamic Eye Variables managed by JS */
+    --eye-color: #18d7e8;
+    --eye-color-dark: #075c64;
+    --eye-color-mid: #0fa6b4;
+    --eye-glow: rgba(24, 215, 232, 0.55);
+    --eye-scale: 1.0;
+    --eye-spacing: 120px;
+    
+    --font-heading: 'Space Grotesk', sans-serif;
+    --font-body: 'Outfit', sans-serif;
+}
+
+/* Reset and Global Styles */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* Cosmic Glow Backdrop Background */
+.glow-backdrop {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(24, 215, 232, 0.08) 0%, rgba(0, 0, 0, 0) 70%);
+    top: 20%;
+    left: 10%;
+    z-index: -1;
+    pointer-events: none;
+    filter: blur(80px);
+}
+
+/* App Header Styling */
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 40px;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(10, 12, 16, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 10;
+}
+
+.logo {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+.logo-accent {
+    color: var(--accent-color);
+    text-shadow: 0 0 10px var(--accent-glow);
+}
+
+.status-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #10b981;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #10b981;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.15); }
+}
+
+.animate-pulse {
+    animation: pulse 2s infinite ease-in-out;
+}
+
+/* Layout Main Container */
+.main-container {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 40px;
+    padding: 40px;
+    max-width: 1440px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Device column & Virtual Display Viewport */
+.device-column {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.device-frame {
+    width: 100%;
+    max-width: 580px;
+    aspect-ratio: 1.35;
+    background: linear-gradient(135deg, #1b212f 0%, #0d1017 100%);
+    border-radius: 36px;
+    padding: 16px;
+    box-shadow: 
+        0 25px 50px -12px rgba(0, 0, 0, 0.7),
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        inset 0 2px 4px rgba(255, 255, 255, 0.1);
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.device-screen {
+    width: 100%;
+    height: 100%;
+    background-color: #000000;
+    border-radius: 24px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.95);
+}
+
+/* The iconic capsule eyes */
+.eye-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--eye-spacing) - 100px); /* Adjust spacing based on width */
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+/* Wrappers allow squash and stretch independently of beveled eye elements */
+.eye-wrapper {
+    position: relative;
+    width: 101px;
+    height: 165px;
+    transform-origin: center center;
+    transition: transform 0.15s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* Capsule 3D styling from reference picture */
+.eye.capsule {
+    width: 100%;
+    height: 100%;
+    border-radius: 50.5px; /* Rounded pill capsule shape */
+    background: radial-gradient(circle at center, var(--eye-color) 20%, var(--eye-color-mid) 60%, var(--eye-color-dark) 100%);
+    position: absolute;
+    top: 0;
+    left: 0;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transform-origin: center center;
+    
+    /* Complex multiple shadows layers to achieve 3D inset/bevel pill look */
+    box-shadow: 
+        inset 0 10px 14px rgba(255, 255, 255, 0.35),   /* Glossy reflection on top bevel */
+        inset 0 -12px 14px rgba(0, 0, 0, 0.7),         /* Shadow at the bottom bevel */
+        inset 10px 0 14px rgba(0, 0, 0, 0.4),          /* Side shading for roundness */
+        inset -10px 0 14px rgba(0, 0, 0, 0.4),
+        0 0 35px var(--eye-glow);                      /* Outer glow effect onto screen background */
+}
+
+/* Active eye states / emotions */
+.eye.happy {
+    border-radius: 50.5px 50.5px 15px 15px;
+    transform: scaleY(0.7) translateY(20px);
+}
+
+.eye.angry {
+    transform: rotate(15deg);
+}
+.eye-wrapper.right .eye.angry {
+    transform: rotate(-15deg);
+}
+
+.eye.sad {
+    transform: rotate(-12deg);
+}
+.eye-wrapper.right .eye.sad {
+    transform: rotate(12deg);
+}
+
+.eye.sleepy {
+    transform: scaleY(0.3) translateY(50px);
+}
+
+.eye.surprised {
+    transform: scale(1.22);
+}
+
+/* Device Bezel Accent Detail */
+.device-bezel-accent {
+    position: absolute;
+    width: 60px;
+    height: 5px;
+    background-color: rgba(255, 255, 255, 0.15);
+    bottom: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 10px;
+}
+
+/* Instruction Card under simulator screen */
+.instruction-card {
+    margin-top: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    padding: 16px 24px;
+    border-radius: 16px;
+    text-align: center;
+    width: 100%;
+    max-width: 580px;
+    backdrop-filter: blur(8px);
+}
+
+.instruction-card p {
+    font-size: 0.95rem;
+    color: var(--text-muted);
+}
+
+.key-highlight {
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+/* Control Column & Dashboard Cards */
+.control-column {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.control-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    padding: 28px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.control-card h2 {
+    font-family: var(--font-heading);
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    border-left: 3px solid var(--accent-color);
+    padding-left: 10px;
+}
+
+/* Grid of Buttons for expressions */
+.btn-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.expr-btn {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    padding: 14px 10px;
+    border-radius: 14px;
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease-in-out;
+}
+
+.expr-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+
+.expr-btn.active {
+    background: rgba(24, 215, 232, 0.08);
+    border-color: var(--accent-color);
+    color: var(--text-primary);
+    box-shadow: 0 0 15px rgba(24, 215, 232, 0.15);
+}
+
+.btn-icon {
+    font-size: 1.3rem;
+}
+
+/* Config tuning sliders & picker styles */
+.config-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.config-row:last-of-type {
+    margin-bottom: 0;
+}
+
+.config-row label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.color-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+input[type="color"] {
+    -webkit-appearance: none;
+    border: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    cursor: pointer;
+    background: none;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+    border: 2px solid var(--border-color);
+    border-radius: 50%;
+}
+
+.value-display {
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    min-width: 70px;
+    text-align: center;
+}
+
+.slider-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 65%;
+}
+
+input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    box-shadow: 0 0 10px var(--accent-glow);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.25);
+}
+
+.checkbox-row {
+    margin-top: 24px;
+    display: block;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+input[type="checkbox"] {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    outline: none;
+    background-color: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+input[type="checkbox"]:checked {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+input[type="checkbox"]:checked::before {
+    content: "✓";
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--bg-primary);
+}
+
+/* Code Card styling */
+.code-card {
+    padding: 22px;
+}
+
+.code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.code-header h2 {
+    margin-bottom: 0;
+}
+
+.copy-btn {
+    background: rgba(24, 215, 232, 0.1);
+    border: 1px solid var(--accent-color);
+    color: var(--accent-color);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+    background: var(--accent-color);
+    color: var(--bg-primary);
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.code-container {
+    background: #07090e;
+    border-radius: 12px;
+    padding: 16px;
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    max-height: 140px;
+}
+
+.code-container pre {
+    margin: 0;
+}
+
+.code-container code {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+    color: #4df3a9;
+}
+
+/* Footer Styling */
+.app-footer {
+    text-align: center;
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Media Queries for Responsive Design */
+@media(max-width: 1024px) {
+    .main-container {
+        grid-template-columns: 1fr;
+        gap: 30px;
+        padding: 24px;
+    }
+}

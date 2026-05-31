@@ -1,0 +1,24 @@
+Command: cmake -G Ninja -B /Users/pankaj/Desktop/DESKIMON/build -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/Users/pankaj/.espressif/python_env/idf6.2_py3.14_env/bin/python -DESP_PLATFORM=1 -DCCACHE_ENABLE=False /Users/pankaj/Desktop/DESKIMON
+-- Component directory /Users/pankaj/esp/esp-idf/components/idf_test does not contain a CMakeLists.txt file. No component will be added
+-- Minimal build - OFF
+-- git rev-parse returned 'fatal: not a git repository (or any of the parent directories): .git'
+-- Could not use 'git describe' to determine PROJECT_VER.
+-- Building ESP-IDF components for target esp32s3
+NOTICE: Current idf-component-manager default lock file version is 3.0.0, but found 2.0.0 in /Users/pankaj/Desktop/DESKIMON/dependencies.lock. Recreating lock file with the current version.
+NOTICE: Using component placed at /Users/pankaj/Desktop/DESKIMON/components/espressif__esp-dsp for dependency "espressif/esp-dsp"(introduced by component "espressif/esp-sr")
+NOTICE: Using component placed at /Users/pankaj/Desktop/DESKIMON/components/chmorgan__esp-audio-player for dependency "chmorgan/esp-audio-player", specified in /Users/pankaj/Desktop/DESKIMON/main/idf_component.yml
+NOTICE: Using component placed at /Users/pankaj/Desktop/DESKIMON/components/chmorgan__esp-libhelix-mp3 for dependency "chmorgan/esp-libhelix-mp3", specified in /Users/pankaj/Desktop/DESKIMON/main/idf_component.yml
+NOTICE: Using component placed at /Users/pankaj/Desktop/DESKIMON/components/espressif__esp-sr for dependency "espressif/esp-sr", specified in /Users/pankaj/Desktop/DESKIMON/main/idf_component.yml
+NOTICE: Using component placed at /Users/pankaj/Desktop/DESKIMON/components/lvgl__lvgl for dependency "lvgl/lvgl", specified in /Users/pankaj/Desktop/DESKIMON/main/idf_component.yml
+NOTICE: Using component placed at /Users/pankaj/Desktop/DESKIMON/components/espressif__esp-dsp for dependency "espressif/esp-dsp"(introduced by component "espressif/esp-sr"), specified in /Users/pankaj/Desktop/DESKIMON/main/idf_component.yml
+NOTICE: Using component placed at /Users/pankaj/Desktop/DESKIMON/components/espressif__esp-dsp for dependency "espressif/esp-dsp", specified in /Users/pankaj/Desktop/DESKIMON/components/espressif__esp-sr/idf_component.yml
+NOTICE: Updating lock file at /Users/pankaj/Desktop/DESKIMON/dependencies.lock
+NOTICE: Processing 6 dependencies:
+NOTICE: [1/6] chmorgan/esp-audio-player (1.0.7) (/Users/pankaj/Desktop/DESKIMON/components/chmorgan__esp-audio-player)
+NOTICE: [2/6] chmorgan/esp-libhelix-mp3 (1.0.3) (/Users/pankaj/Desktop/DESKIMON/components/chmorgan__esp-libhelix-mp3)
+NOTICE: [3/6] espressif/esp-dsp (1.4.12) (/Users/pankaj/Desktop/DESKIMON/components/espressif__esp-dsp)
+NOTICE: [4/6] espressif/esp-sr (1.9.4) (/Users/pankaj/Desktop/DESKIMON/components/espressif__esp-sr)
+NOTICE: [5/6] lvgl/lvgl (8.3.11) (/Users/pankaj/Desktop/DESKIMON/components/lvgl__lvgl)
+NOTICE: [6/6] idf (6.2.0)
+-- ESP-TEE is currently supported only on the esp32c6;esp32h2;esp32c5;esp32c61 SoCs
+-- Configuring incomplete, errors occurred!

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deskimon - Premium Capsule Eyes Simulator</title>
+    <meta name="description" content="An interactive web simulator for the Deskimon desktop companion robot's 3D-like moving eyes animation and customizable expressions.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Vanilla CSS Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glow-backdrop"></div>
+    
+    <header class="app-header">
+        <div class="logo">
+            <span class="logo-accent">DESKI</span><span>MON</span>
+        </div>
+        <div class="status-badge">
+            <span class="status-dot animate-pulse"></span> SIMULATOR ACTIVE
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Section 1: Device Viewport containing the Interactive Eyes -->
+        <section class="device-column">
+            <div class="device-frame" id="deviceFrame">
+                <div class="device-screen">
+                    <div class="eye-container" id="eyeContainer">
+                        <!-- Left Eye Capsule -->
+                        <div class="eye-wrapper left">
+                            <div class="eye capsule" id="eyeLeft"></div>
+                        </div>
+                        <!-- Right Eye Capsule -->
+                        <div class="eye-wrapper right">
+                            <div class="eye capsule" id="eyeRight"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="device-bezel-accent"></div>
+            </div>
+            <div class="instruction-card">
+                <p><span class="key-highlight">Hover & Move Mouse</span> inside this card or screen area to make Deskimon track your movements.</p>
+            </div>
+        </section>
+
+        <!-- Section 2: Controls & Options -->
+        <section class="control-column">
+            <!-- Card A: Expressions -->
+            <div class="control-card">
+                <h2>Robot Expressions</h2>
+                <div class="btn-grid">
+                    <button class="expr-btn active" id="btnNeutral" onclick="setExpression('neutral')">
+                        <span class="btn-icon">😐</span> Neutral
+                    </button>
+                    <button class="expr-btn" id="btnHappy" onclick="setExpression('happy')">
+                        <span class="btn-icon">😊</span> Happy
+                    </button>
+                    <button class="expr-btn" id="btnAngry" onclick="setExpression('angry')">
+                        <span class="btn-icon">😠</span> Angry
+                    </button>
+                    <button class="expr-btn" id="btnSad" onclick="setExpression('sad')">
+                        <span class="btn-icon">🥺</span> Sad
+                    </button>
+                    <button class="expr-btn" id="btnSleepy" onclick="setExpression('sleepy')">
+                        <span class="btn-icon">😴</span> Sleepy
+                    </button>
+                    <button class="expr-btn" id="btnSurprised" onclick="setExpression('surprised')">
+                        <span class="btn-icon">😲</span> Surprised
+                    </button>
+                </div>
+            </div>
+
+            <!-- Card B: Hardware Config Tuning -->
+            <div class="control-card">
+                <h2>Hardware Configurations</h2>
+                
+                <div class="config-row">
+                    <label for="colorPicker">Eye Theme Color</label>
+                    <div class="color-picker-wrapper">
+                        <input type="color" id="colorPicker" value="#18d7e8" oninput="updateColor(this.value)">
+                        <span id="colorHexText" class="value-display">#18D7E8</span>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <label for="scaleSlider">Eye Scale</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="scaleSlider" min="0.5" max="1.5" step="0.05" value="1.0" oninput="updateScale(this.value)">
+                        <span id="scaleValText" class="value-display">1.0x</span>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <label for="spacingSlider">Eye Spacing</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="spacingSlider" min="60" max="200" step="5" value="120" oninput="updateSpacing(this.value)">
+                        <span id="spacingValText" class="value-display">120px</span>
+                    </div>
+                </div>
+
+                <div class="config-row">
+                    <label for="blinkSlider">Blink Frequency</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="blinkSlider" min="2000" max="10000" step="500" value="4500" oninput="updateBlinkFreq(this.value)">
+                        <span id="blinkValText" class="value-display">4.5s</span>
+                    </div>
+                </div>
+
+                <div class="config-row checkbox-row">
+                    <label for="mouseTrackToggle" class="checkbox-label">
+                        <input type="checkbox" id="mouseTrackToggle" checked onchange="toggleMouseTracking(this.checked)">
+                        Enable Mouse Tracking
+                    </label>
+                </div>
+            </div>
+
+            <!-- Card C: Embedded C Code Generator -->
+            <div class="control-card code-card">
+                <div class="code-header">
+                    <h2>ESP32 C Configuration</h2>
+                    <button class="copy-btn" id="copyCodeBtn" onclick="copyCodeToClipboard()">Copy Code</button>
+                </div>
+                <div class="code-container">
+                    <pre><code id="codeBlock">// Active Expression Code Block will output here...</code></pre>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <p>Built for the Deskimon project | Interactive Beveled Capsule Design</p>
+    </footer>
+
+    <!-- Vanilla Javascript Logic -->
+    <script src="script.js"></script>
+</body>
+</html>

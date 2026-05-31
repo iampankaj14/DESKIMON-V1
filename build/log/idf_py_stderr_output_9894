@@ -1,0 +1,4 @@
+[0;33m--- esp-idf-monitor 1.9.0 on /dev/cu.usbmodem14201 115200[0m
+[0;33m--- Quit: Ctrl+] | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H[0m
+[0m--- 0x42042d86: [0;33mdl_tie728_pointwise_conv1d_qacc_i16o16k8b16_round_ltz_end[0m[0m at [0;32m/home/sunxiangyu/workspace/esp_sr_lib/components/dl_lib/base/tie728/dl_tie728_pointwise_conv1d_qacc_i16o16k8b16.S[0m[0m:[1;31m195[0m
+[0m
