@@ -12,6 +12,7 @@
 
 void Driver_Loop(void *parameter)
 {
+    vTaskDelay(pdMS_TO_TICKS(5000));
     Wireless_Init();
     while(1)
     {
@@ -47,10 +48,10 @@ void app_main(void)
 
     SD_Init();
     LCD_Init();
-    Audio_Init();
-    MIC_Speech_init();
-    //Play_Music("/sdcard","udi.mp3");
     LVGL_Init();
+    Audio_Init();
+    // MIC_Speech_init(); // Temporarily disabled to free up internal SRAM for TLS/HTTP diagnostics
+    //Play_Music("/sdcard","udi.mp3");
 
     // Start the Deskimon Interface
     Deskimon_Start();

@@ -1,0 +1,33 @@
+{
+  "product": {
+    "name": "DESKIMON",
+    "name_lower": "deskimon",
+    "name_display": "Deskimon",
+    "tagline": "Your Living Desk Companion",
+    "description": "A smart, expressive desk companion that reacts to your voice, touch, and motion — powered by AI.",
+    "wake_word": "Hey Deskimon",
+    "domain": "deskimon.com",
+    "version": "1.0.0"
+  },
+  "branding": {
+    "primary_color": "#00FFFF",
+    "primary_color_dark": "#00CCCC",
+    "secondary_color": "#FF6B6B",
+    "background_dark": "#0A0A0A",
+    "background_card": "#141414",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A0A0A0",
+    "accent_gradient_start": "#00FFFF",
+    "accent_gradient_end": "#7B61FF",
+    "eye_color_default": "0x00FFFF"
+  },
+  "wifi": {
+    "ap_ssid_prefix": "DESKIMON",
+    "ap_password": "",
+    "captive_portal_ip": "192.168.4.1"
+  },
+  "ble": {
+    "device_name_prefix": "DESKIMON"
+  },
+  "_note": "This file is the SINGLE SOURCE OF TRUTH for the product name and branding. If the product name changes, update it here and regenerate configs for firmware, web app, and captive portal."
+}

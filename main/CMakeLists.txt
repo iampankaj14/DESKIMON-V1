@@ -16,6 +16,9 @@ idf_component_register(
                               "./BAT_Driver/BAT_Driver.c"
                               "./PWR_Key/PWR_Key.c"
                               "./Wireless/Wireless.c"
+                              "./Provisioning/Provisioning.c"
+                              "./Provisioning/dns_server.c"
+                              "./Cloud/Cloud.c"
 
                          INCLUDE_DIRS 
                               "./Audio_Driver" 
@@ -33,5 +36,26 @@ idf_component_register(
                               "./BAT_Driver"
                               "./PWR_Key"
                               "./Wireless"
+                              "./Provisioning"
+                              "./Cloud"
                               "."
+                         EMBED_FILES
+                              "./Provisioning/portal.html"
+                         PRIV_REQUIRES
+                              esp_websocket_client
+                              esp_http_client
+                              esp_wifi
+                              esp_event
+                              nvs_flash
+                              esp_lcd
+                              driver
+                              lvgl__lvgl
+                              chmorgan__esp-audio-player
+                              espressif__esp-sr
+                              espressif__esp-dsp
+                              fatfs
+                              unity
+                              bt
+                              esp_adc
+                              esp_http_server
                        )

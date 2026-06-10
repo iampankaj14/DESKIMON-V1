@@ -85,7 +85,7 @@ static void detect_hander(AppSpeech *self)
 #endif // CONFIG_IDF_TARGET_ESP32S3
     ESP_LOGI(TAG, "multinet:%s\n", mn_name);
     esp_mn_iface_t *multinet = esp_mn_handle_from_name(mn_name);
-    model_iface_data_t *model_data = multinet->create(mn_name, 6000);
+    model_iface_data_t *model_data = multinet->create(mn_name, 3000);
     esp_mn_commands_update_from_sdkconfig(multinet, model_data); // Add speech commands from sdkconfig
     int mu_chunksize = multinet->get_samp_chunksize(model_data);
     assert(mu_chunksize == afe_chunksize);
@@ -208,7 +208,7 @@ void MIC_Speech_init()
         .wakenet_model_name_2 = NULL,
         .wakenet_mode = DET_MODE_2CH_90,
         .afe_mode = SR_MODE_LOW_COST,
-        .afe_perferred_core = 0,
+        .afe_perferred_core = 1,
         .afe_perferred_priority = 5,
         .afe_ringbuf_size = 50,
         .memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM,
@@ -233,6 +233,6 @@ void MIC_Speech_init()
     afe_config.pcm_config.sample_rate = 16000;
     afe_config.wakenet_model_name = esp_srmodel_filter(MIC_Speech.models, ESP_WN_PREFIX, NULL);
     MIC_Speech.afe_data = MIC_Speech.afe_handle->create_from_config(&afe_config);
-    xTaskCreatePinnedToCore((TaskFunction_t)feed_handler, "App/SR/Feed", 4 * 1024, &MIC_Speech, 5, NULL, 0);
-    xTaskCreatePinnedToCore((TaskFunction_t)detect_hander, "App/SR/Detect", 5 * 1024, &MIC_Speech, 5, NULL, 0);
+    xTaskCreatePinnedToCore((TaskFunction_t)feed_handler, "App/SR/Feed", 4 * 1024, &MIC_Speech, 5, NULL, 1);
+    xTaskCreatePinnedToCore((TaskFunction_t)detect_hander, "App/SR/Detect", 5 * 1024, &MIC_Speech, 5, NULL, 1);
 }

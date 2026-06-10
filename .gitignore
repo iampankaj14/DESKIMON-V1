@@ -1,0 +1,13 @@
+# ESP-IDF build directory
+build/
+
+# Local cache/configuration
+.cache/
+.vscode/
+venv/
+sdkconfig.old
+dependencies.lock
+
+# System files
+.DS_Store
+*.bin

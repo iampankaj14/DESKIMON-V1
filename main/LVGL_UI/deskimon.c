@@ -27,6 +27,9 @@ typedef enum {
 
 static eye_state_t current_state = EYE_STATE_BOOT;
 
+static uint32_t s_eye_color_hex = 0x00FFFF;
+static volatile bool s_eye_color_pending = false;
+
 // UI Objects
 static lv_obj_t * eye_l;
 static lv_obj_t * eye_r;
@@ -246,8 +249,8 @@ static void set_eyes_state(eye_state_t new_state) {
     current_state = new_state;
     state_time = 0;
     
-    lv_obj_set_style_bg_color(eye_l, lv_color_hex(0x00FFFF), 0);
-    lv_obj_set_style_bg_color(eye_r, lv_color_hex(0x00FFFF), 0);
+    lv_obj_set_style_bg_color(eye_l, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_bg_color(eye_r, lv_color_hex(s_eye_color_hex), 0);
     
     // Hide base eyes ONLY if we are switching to dedicated eyes
     if (new_state == EYE_STATE_INSECURE || new_state == EYE_STATE_INTEREST || 
@@ -468,6 +471,28 @@ static void logic_timer_cb(lv_timer_t * t)
 {
     state_time += 100;
     idle_time += 100;
+
+    if (s_eye_color_pending) {
+        s_eye_color_pending = false;
+        lv_color_t color = lv_color_hex(s_eye_color_hex);
+        if (eye_l) lv_obj_set_style_bg_color(eye_l, color, 0);
+        if (eye_r) lv_obj_set_style_bg_color(eye_r, color, 0);
+        if (mouth_arc_l) lv_obj_set_style_arc_color(mouth_arc_l, color, LV_PART_MAIN);
+        if (mouth_arc_r) lv_obj_set_style_arc_color(mouth_arc_r, color, LV_PART_MAIN);
+        if (interest_mouth_l) lv_obj_set_style_arc_color(interest_mouth_l, color, LV_PART_MAIN);
+        if (interest_mouth_r) lv_obj_set_style_arc_color(interest_mouth_r, color, LV_PART_MAIN);
+        if (mouth_yawn) lv_obj_set_style_bg_color(mouth_yawn, color, 0);
+        if (tear_l) lv_obj_set_style_bg_color(tear_l, color, 0);
+        if (tear_r) lv_obj_set_style_bg_color(tear_r, color, 0);
+        if (mouth_triangle) lv_obj_set_style_bg_color(mouth_triangle, color, 0);
+        if (ignore_hemi_l) lv_obj_set_style_bg_color(ignore_hemi_l, color, 0);
+        if (ignore_hemi_r) lv_obj_set_style_bg_color(ignore_hemi_r, color, 0);
+        if (mouth_wtf) lv_obj_set_style_bg_color(mouth_wtf, color, 0);
+        if (mouth_wtf_circle) lv_obj_set_style_bg_color(mouth_wtf_circle, color, 0);
+        if (laugh_mouth) lv_obj_set_style_bg_color(laugh_mouth, color, 0);
+        if (laugh_hemi_l) lv_obj_set_style_bg_color(laugh_hemi_l, color, 0);
+        if (laugh_hemi_r) lv_obj_set_style_bg_color(laugh_hemi_r, color, 0);
+    }
 
     if (current_state == EYE_STATE_EYES_CLOSED) {
         if (state_time > 0 && state_time % 200 == 0) {
@@ -690,6 +715,13 @@ static void create_eye_masks(lv_obj_t * eye, lv_obj_t ** top_mask, lv_obj_t ** m
 
 void Deskimon_Start(void)
 {
+    #include "../Provisioning/Provisioning.h"
+    const device_config_t *cfg = Provisioning_GetConfig();
+    if (cfg && cfg->eye_color != 0) {
+        s_eye_color_hex = cfg->eye_color;
+    }
+    s_eye_color_pending = true;
+
     lv_obj_t * scr = lv_scr_act();
     lv_obj_add_event_cb(scr, screen_event_cb, LV_EVENT_ALL, NULL);
     lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
@@ -1026,3 +1058,10 @@ void Deskimon_Start(void)
 
     logic_timer = lv_timer_create(logic_timer_cb, 100, NULL);
 }
+
+void Deskimon_SetEyeColor(uint32_t color_hex)
+{
+    s_eye_color_hex = color_hex;
+    s_eye_color_pending = true;
+}
+

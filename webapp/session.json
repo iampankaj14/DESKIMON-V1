@@ -1,0 +1,53 @@
+{
+  "access_token": "eyJhbGciOiJFUzI1NiIsImtpZCI6IjUwMDVjMGM1LTFkNDgtNDIzNC1hMzcxLWIzZDc4YmY5ODg2MSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2NuYnd0dGpvamxyY29ubWFyZ3poLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI5ZmJlODNjOS05ZTFlLTQ3ZjgtYjY4ZC0yNTE5OWQ0NDc0Y2UiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgxMTA4MzMwLCJpYXQiOjE3ODExMDQ3MzAsImVtYWlsIjoicGFua2FqaWFtMTRAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJkaXNwbGF5X25hbWUiOiJQQU5LQUogS1VNQVIiLCJlbWFpbCI6InBhbmthamlhbTE0QGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInN1YiI6IjlmYmU4M2M5LTllMWUtNDdmOC1iNjhkLTI1MTk5ZDQ0NzRjZSJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzgwODUyMjA4fV0sInNlc3Npb25faWQiOiIwNTc2ZDk4NS1jMWVkLTQ0ZTgtODg3Zi03NGM1ZWFlMGZlYWIiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.YwK7Ms3Ndntk4UTZ3a7eaSv11Rp1348vumlXhjjGzSNg4L5LCiictOtNCGtMp8b7x_TMUJfx8L8wSziwEnP7dg",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "expires_at": 1781108330,
+  "refresh_token": "3b323vlkhq7c",
+  "user": {
+    "id": "9fbe83c9-9e1e-47f8-b68d-25199d4474ce",
+    "aud": "authenticated",
+    "role": "authenticated",
+    "email": "pankajiam14@gmail.com",
+    "email_confirmed_at": "2026-06-04T10:29:38.727449Z",
+    "phone": "",
+    "confirmation_sent_at": "2026-06-04T10:29:02.64703Z",
+    "confirmed_at": "2026-06-04T10:29:38.727449Z",
+    "last_sign_in_at": "2026-06-07T17:10:08.01913Z",
+    "app_metadata": {
+      "provider": "email",
+      "providers": [
+        "email"
+      ]
+    },
+    "user_metadata": {
+      "display_name": "PANKAJ KUMAR",
+      "email": "pankajiam14@gmail.com",
+      "email_verified": true,
+      "phone_verified": false,
+      "sub": "9fbe83c9-9e1e-47f8-b68d-25199d4474ce"
+    },
+    "identities": [
+      {
+        "identity_id": "2c7957f0-d6de-4fb3-b434-889d841cb740",
+        "id": "9fbe83c9-9e1e-47f8-b68d-25199d4474ce",
+        "user_id": "9fbe83c9-9e1e-47f8-b68d-25199d4474ce",
+        "identity_data": {
+          "display_name": "PANKAJ KUMAR",
+          "email": "pankajiam14@gmail.com",
+          "email_verified": true,
+          "phone_verified": false,
+          "sub": "9fbe83c9-9e1e-47f8-b68d-25199d4474ce"
+        },
+        "provider": "email",
+        "last_sign_in_at": "2026-06-04T10:29:02.637112Z",
+        "created_at": "2026-06-04T10:29:02.637749Z",
+        "updated_at": "2026-06-04T10:29:02.637749Z",
+        "email": "pankajiam14@gmail.com"
+      }
+    ],
+    "created_at": "2026-06-04T10:29:02.608843Z",
+    "updated_at": "2026-06-10T15:18:50.744537Z",
+    "is_anonymous": false
+  }
+}

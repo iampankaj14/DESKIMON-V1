@@ -10,3 +10,4 @@
 #include "Wireless.h"
 
 void Deskimon_Start(void);
+void Deskimon_SetEyeColor(uint32_t color_hex);

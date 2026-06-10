@@ -1,4 +1,6 @@
 #include "Wireless.h"
+#include "Provisioning.h"
+#include "Cloud.h"
 
 uint16_t BLE_NUM = 0;
 uint16_t WIFI_NUM = 0;
@@ -6,6 +8,7 @@ bool Scan_finish = 0;
 
 bool WiFi_Scan_Finish = 0;
 bool BLE_Scan_Finish = 0;
+
 void Wireless_Init(void)
 {
     // Initialize NVS.
@@ -14,26 +17,47 @@ void Wireless_Init(void)
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-    ESP_ERROR_CHECK( ret );
-    // WiFi
-    xTaskCreatePinnedToCore(
-        WIFI_Init, 
-        "WIFI task",
-        4096, 
-        NULL, 
-        1, 
-        NULL, 
-        0);
-    // // BLE
-    // xTaskCreatePinnedToCore(
-    //     BLE_Init, 
-    //     "BLE task",
-    //     4096, 
-    //     NULL, 
-    //     2, 
-    //     NULL, 
-    //     0);
+    ESP_ERROR_CHECK(ret);
+
+    // Initialize Network Stack
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    // Create netifs for both station and access point modes
+    esp_netif_create_default_wifi_sta();
+    esp_netif_create_default_wifi_ap();
+
+    // Initialize Wi-Fi stack
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    // Initialize Provisioning Module
+    ESP_ERROR_CHECK(Provisioning_Init());
+
+    // Check provisioning state and act
+    prov_state_t state = Provisioning_GetState();
+    if (state == PROV_STATE_UNPROVISIONED) {
+        ESP_LOGI("Wireless", "Device not provisioned. Launching Captive Portal...");
+        ESP_ERROR_CHECK(Provisioning_StartCaptivePortal());
+    } else {
+        ESP_LOGI("Wireless", "Device provisioned. Connecting to saved Wi-Fi SSID...");
+        esp_err_t conn_err = Provisioning_ConnectWiFi();
+        if (conn_err != ESP_OK) {
+            ESP_LOGE("Wireless", "Failed to connect to saved Wi-Fi. Launching Captive Portal fallback...");
+            ESP_ERROR_CHECK(Provisioning_StartCaptivePortal());
+        } else {
+            // Wi-Fi connected successfully!
+            if (Provisioning_GetState() == PROV_STATE_FULLY_PROVISIONED) {
+                ESP_LOGI("Wireless", "Device fully provisioned. Starting database sync...");
+                Cloud_Start();
+            } else {
+                ESP_LOGI("Wireless", "Wi-Fi connected. Waiting for device to be linked in Supabase...");
+                Cloud_StartLinkingTask();
+            }
+        }
+    }
 }
+
 
 void WIFI_Init(void *arg)
 {

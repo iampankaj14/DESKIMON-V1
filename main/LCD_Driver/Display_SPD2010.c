@@ -34,6 +34,14 @@ static void test_draw_bitmap(esp_lcd_panel_handle_t panel_handle)
   free(color);
 }
 
+extern lv_disp_drv_t disp_drv;
+
+static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx) {
+    lv_disp_drv_t *disp_driver = (lv_disp_drv_t *)user_ctx;
+    lv_disp_flush_ready(disp_driver);
+    return false;
+}
+
 int QSPI_Init(void){
   static const spi_bus_config_t host_config = {            
     .data0_io_num = ESP_PANEL_LCD_SPI_IO_DATA0,                    
@@ -61,8 +69,8 @@ int QSPI_Init(void){
     .spi_mode = ESP_PANEL_LCD_SPI_MODE,                      
     .pclk_hz = ESP_PANEL_LCD_SPI_CLK_HZ,     
     .trans_queue_depth = ESP_PANEL_LCD_SPI_TRANS_QUEUE_SZ,            
-    .on_color_trans_done = NULL,                            
-    .user_ctx = NULL,                   
+    .on_color_trans_done = notify_lvgl_flush_ready,                            
+    .user_ctx = &disp_drv,                   
     .lcd_cmd_bits = ESP_PANEL_LCD_SPI_CMD_BITS,                 
     .lcd_param_bits = ESP_PANEL_LCD_SPI_PARAM_BITS,                
     .flags = {                          
