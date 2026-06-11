@@ -180,7 +180,11 @@ export default function DashboardLayout({ children }) {
     };
     
     recognitionObj.onerror = (err) => {
-      console.error("Speech recognition error event:", err.error, err.message, err);
+      if (err.error !== 'no-speech' && err.error !== 'aborted') {
+        console.error("Speech recognition error event:", err.error, err.message, err);
+      } else {
+        console.log("Speech recognition status event:", err.error, err.message);
+      }
       if (err.error === 'no-speech') {
         if (assistantStatus.includes('Waiting')) {
           restartListeningSilently();
@@ -228,7 +232,7 @@ export default function DashboardLayout({ children }) {
     
     try {
       console.log("Using API key:", GEMINI_API_KEY ? `${GEMINI_API_KEY.substring(0, 5)}...` : 'undefined');
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY || ''}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY || ''}`;
       
       const requestBody = {
         contents: {
