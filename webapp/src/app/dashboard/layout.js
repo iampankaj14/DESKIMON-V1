@@ -63,20 +63,6 @@ export default function DashboardLayout({ children }) {
       console.log("Microphone permission granted.");
       window.localMicStream = stream; // keep it alive
       setMicActive(true);
-      
-      // Warm up SpeechRecognition with user gesture
-      if (recognitionObj) {
-        try {
-          recognitionObj.start();
-          setTimeout(() => {
-            try {
-              recognitionObj.stop();
-            } catch (e) {}
-          }, 100);
-        } catch (e) {
-          console.warn("Speech recognition warm up failed:", e);
-        }
-      }
     } catch (err) {
       console.error("Microphone initialization error:", err);
       setMicError(err.message || 'Access denied');
@@ -201,6 +187,8 @@ export default function DashboardLayout({ children }) {
         } else {
           setAssistantStatus('Listening (Speak now...)');
         }
+      } else if (err.error === 'aborted') {
+        console.log("Speech recognition aborted or restarted programmatically.");
       } else if (err.error === 'not-allowed') {
         setAssistantStatus('Microphone blocked! Please allow microphone access in your browser settings.');
       } else if (err.error === 'audio-capture') {
@@ -239,7 +227,8 @@ export default function DashboardLayout({ children }) {
     if (!activeId) return;
     
     try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      console.log("Using API key:", GEMINI_API_KEY ? `${GEMINI_API_KEY.substring(0, 5)}...` : 'undefined');
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY || ''}`;
       
       const requestBody = {
         contents: {
@@ -259,7 +248,10 @@ export default function DashboardLayout({ children }) {
         body: JSON.stringify(requestBody)
       });
       
+      console.log("Gemini API HTTP Status:", response.status);
       const resJson = await response.json();
+      console.log("Gemini API response JSON:", resJson);
+      
       const aiResponse = resJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "I couldn't process that.";
       console.log("Gemini Response:", aiResponse);
       setAiResponseText(aiResponse);
