@@ -14,12 +14,17 @@ static esp_err_t bsp_i2s_write(void *audio_buffer, size_t len, size_t *bytes_wri
     int16_t *samples = (int16_t *)audio_buffer;
     size_t sample_count = len / sizeof(int16_t);
     
-    // Calculate the volume scaling factor to convert the volume level from 0-100 to the 0.0-1.0 range
-    float volume_factor = Volume / 100.0f;
-
+    // Convert 0-100 Volume to 0.0 - 4.0 scaling factor (max 400% volume)
+    float volume_factor = (Volume / 100.0f) * 4.0f;
 
     for (size_t i = 0; i < sample_count; i++) {
-        samples[i] = (int16_t)(samples[i] * volume_factor);
+        int32_t sample_val = (int32_t)(samples[i] * volume_factor);
+        if (sample_val > 32767) {
+            sample_val = 32767;
+        } else if (sample_val < -32768) {
+            sample_val = -32768;
+        }
+        samples[i] = (int16_t)sample_val;
     }
 
     return i2s_channel_write(i2s_tx_chan, (char *)audio_buffer, len, bytes_written, timeout_ms);
@@ -195,9 +200,10 @@ void Music_pause(void)
 
 
 void Volume_adjustment(uint8_t Vol) {
-    if(Vol > Volume_MAX )
-        printf("Audio : The volume value is incorrect. Please enter 0 to 21\r\n");
-    else  
+    if (Vol > Volume_MAX) {
+        printf("Audio : The volume value is incorrect. Please enter 0 to 100\r\n");
+    } else {
         Volume = Vol;
-    ESP_LOGI(TAG, "Volume set to %d", Volume);
+    }
+    ESP_LOGI(TAG, "Volume set to %d (scaling factor: %.2f)", Volume, (Volume / 100.0f) * 4.0f);
 }

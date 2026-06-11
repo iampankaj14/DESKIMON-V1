@@ -50,7 +50,7 @@ void app_main(void)
     LCD_Init();
     LVGL_Init();
     Audio_Init();
-    // MIC_Speech_init(); // Temporarily disabled to free up internal SRAM for TLS/HTTP diagnostics
+    MIC_Speech_init();
     //Play_Music("/sdcard","udi.mp3");
 
     // Start the Deskimon Interface

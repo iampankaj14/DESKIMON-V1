@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include "esp_err.h"
 
 #ifdef __cplusplus
@@ -26,6 +27,14 @@ void Cloud_Stop(void);
  * @return ESP_OK on success
  */
 esp_err_t Cloud_ReportDiagnostics(void);
+
+/**
+ * @brief Update the device's listening state in Supabase.
+ * 
+ * @param is_listening True if wake word is active and device is listening for user voice.
+ * @return ESP_OK on success
+ */
+esp_err_t Cloud_SetListeningState(bool is_listening);
 
 /**
  * @brief Start background task to poll Supabase for device linking/registration

@@ -1,4 +1,6 @@
 #include "MIC_Speech.h"
+#include "Cloud.h"
+#include "deskimon.h"
 
 #include "driver/gpio.h"
 #include "driver/i2s_std.h"
@@ -85,7 +87,7 @@ static void detect_hander(AppSpeech *self)
 #endif // CONFIG_IDF_TARGET_ESP32S3
     ESP_LOGI(TAG, "multinet:%s\n", mn_name);
     esp_mn_iface_t *multinet = esp_mn_handle_from_name(mn_name);
-    model_iface_data_t *model_data = multinet->create(mn_name, 3000);
+    model_iface_data_t *model_data = multinet->create(mn_name, 60000); // Wait up to 1 minute after waking up
     esp_mn_commands_update_from_sdkconfig(multinet, model_data); // Add speech commands from sdkconfig
     int mu_chunksize = multinet->get_samp_chunksize(model_data);
     assert(mu_chunksize == afe_chunksize);
@@ -117,7 +119,8 @@ static void detect_hander(AppSpeech *self)
             self->detected = true;
             self->afe_handle->disable_wakenet(afe_data);
             LCD_Backlight = 35;
-            
+            Cloud_SetListeningState(true);
+            Deskimon_SetEmotion("listening");
         }
 
         if (self->detected) {
@@ -168,6 +171,8 @@ static void detect_hander(AppSpeech *self)
                 self->detected = false;
                 ESP_LOGI(TAG, ">>> Waiting to be waken up <<<");
                 LCD_Backlight = LCD_Backlight_original;
+                Cloud_SetListeningState(false);
+                Deskimon_SetEmotion("normal");
                 if(play_Music_Flag){
                     play_Music_Flag = 0;
                     // Play_Music("/sdcard", "udi.mp3"); // Driver-level playback instead of UI demo

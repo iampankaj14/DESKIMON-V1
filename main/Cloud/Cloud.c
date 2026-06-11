@@ -16,11 +16,14 @@
 #include "freertos/task.h"
 #include "esp_crt_bundle.h"
 #include "esp_heap_caps.h"
+#include "PCM5101.h"
+#include "deskimon.h"
 
 static const char *TAG = "CloudClient";
 
 static esp_websocket_client_handle_t s_ws_client = NULL;
 static TaskHandle_t s_sync_task_handle = NULL;
+static TaskHandle_t s_audio_task_handle = NULL;
 static bool s_cloud_running = false;
 static int s_heartbeat_ref = 1;
 static char *s_ws_rx_buf = NULL;
@@ -41,8 +44,6 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base,
                                      int32_t event_id, void *event_data);
 static void cloud_sync_task(void *pvParameters);
 static void parse_supabase_realtime_msg(const char *msg, size_t len);
-
-extern void Deskimon_SetEyeColor(uint32_t color_hex);
 
 esp_err_t Cloud_Start(void)
 {
@@ -111,19 +112,33 @@ esp_err_t Cloud_Start(void)
         return err;
     }
 
-    // 3. Start Heartbeat & Diagnostics Task (allocated in internal RAM)
-    BaseType_t ret = xTaskCreatePinnedToCore(
+    // 3. Start Heartbeat & Diagnostics Task (statically allocated stack in SPIRAM)
+    static StackType_t *s_sync_stack = NULL;
+    static StaticTask_t *s_sync_task_buf = NULL;
+    if (!s_sync_stack) {
+        s_sync_stack = heap_caps_malloc(8192, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        s_sync_task_buf = heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+
+    if (!s_sync_stack || !s_sync_task_buf) {
+        ESP_LOGE(TAG, "Failed to allocate memory for static cloud sync task");
+        Cloud_Stop();
+        return ESP_ERR_NO_MEM;
+    }
+
+    s_sync_task_handle = xTaskCreateStaticPinnedToCore(
         cloud_sync_task,
         "cloud_sync_task",
-        8192, // 8KB stack in internal RAM
+        8192,
         NULL,
         3,
-        &s_sync_task_handle,
+        s_sync_stack,
+        s_sync_task_buf,
         1
     );
 
-    if (ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create cloud sync task");
+    if (!s_sync_task_handle) {
+        ESP_LOGE(TAG, "Failed to create static cloud sync task");
         Cloud_Stop();
         return ESP_FAIL;
     }
@@ -347,6 +362,94 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base,
             break;
     }
 }
+typedef struct {
+    char url[512];
+} audio_download_args_t;
+
+static void audio_download_task(void *pvParameters)
+{
+    audio_download_args_t *args = (audio_download_args_t *)pvParameters;
+    if (!args) {
+        vTaskDelete(NULL);
+        return;
+    }
+
+    ESP_LOGI(TAG, "Audio download task started for URL: %s", args->url);
+    
+    esp_http_client_config_t config = {
+        .url = args->url,
+        .method = HTTP_METHOD_GET,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .timeout_ms = 15000,
+        .buffer_size = 2048,
+    };
+    
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        ESP_LOGE(TAG, "Failed to initialize HTTP client for audio download");
+        free(args);
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // Set typical browser User-Agent so Translate/voicerss TTS doesn't reject us
+    esp_http_client_set_header(client, "User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+
+    esp_err_t err = esp_http_client_open(client, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open HTTP connection: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        free(args);
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    int content_length = esp_http_client_fetch_headers(client);
+    (void)content_length;
+    
+    FILE *f = fopen("/sdcard/response.mp3", "wb");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open file /sdcard/response.mp3 for writing");
+        esp_http_client_cleanup(client);
+        free(args);
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    char *buffer = heap_caps_malloc(2048, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!buffer) {
+        ESP_LOGE(TAG, "Failed to allocate download buffer in SPIRAM");
+        fclose(f);
+        esp_http_client_cleanup(client);
+        free(args);
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    int read_bytes = 0;
+    int total_bytes = 0;
+    while (true) {
+        read_bytes = esp_http_client_read(client, buffer, 2048);
+        if (read_bytes <= 0) {
+            break;
+        }
+        fwrite(buffer, 1, read_bytes, f);
+        total_bytes += read_bytes;
+    }
+    
+    heap_caps_free(buffer);
+    fclose(f);
+    esp_http_client_cleanup(client);
+    
+    ESP_LOGI(TAG, "Audio download complete. Total bytes: %d. Playing response...", total_bytes);
+    
+    // Play the audio
+    Play_Music("/sdcard", "response.mp3");
+    
+    free(args);
+    s_audio_task_handle = NULL;
+    vTaskDelete(NULL);
+}
 
 static void parse_supabase_realtime_msg(const char *msg, size_t len)
 {
@@ -407,7 +510,55 @@ static void parse_supabase_realtime_msg(const char *msg, size_t len)
                         // call LCD brightness driver helper if available
                     }
                     if (volume != 255) {
-                        // call audio amplifier gain control if available
+                        // Call volume adjustment driver directly
+                        Volume_adjustment(volume);
+                    }
+
+                    // 5. Parse Audio URL and trigger download/play
+                    cJSON *audio_item = cJSON_GetObjectItem(record, "audio_url");
+                    if (audio_item && audio_item->valuestring && strlen(audio_item->valuestring) > 0) {
+                        audio_download_args_t *args = malloc(sizeof(audio_download_args_t));
+                        if (args) {
+                            strncpy(args->url, audio_item->valuestring, sizeof(args->url) - 1);
+                            args->url[sizeof(args->url) - 1] = '\0';
+                            
+                            // Statically allocate stack in SPIRAM
+                            static StackType_t *s_audio_stack = NULL;
+                            static StaticTask_t *s_audio_task_buf = NULL;
+                            if (!s_audio_stack) {
+                                s_audio_stack = heap_caps_malloc(6144, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+                                s_audio_task_buf = heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+                            }
+
+                            if (!s_audio_stack || !s_audio_task_buf) {
+                                ESP_LOGE(TAG, "Failed to allocate static memory for audio download task");
+                                free(args);
+                            } else {
+                                if (s_audio_task_handle != NULL) {
+                                    ESP_LOGW(TAG, "Audio task already active. Deleting prior instance...");
+                                    vTaskDelete(s_audio_task_handle);
+                                    s_audio_task_handle = NULL;
+                                }
+
+                                s_audio_task_handle = xTaskCreateStaticPinnedToCore(
+                                    audio_download_task,
+                                    "audio_download",
+                                    6144,
+                                    args,
+                                    3,
+                                    s_audio_stack,
+                                    s_audio_task_buf,
+                                    1
+                                );
+
+                                if (!s_audio_task_handle) {
+                                    ESP_LOGE(TAG, "Failed to create static audio download task");
+                                    free(args);
+                                } else {
+                                    Deskimon_SetEmotion("happy");
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -603,4 +754,60 @@ esp_err_t Cloud_StartLinkingTask(void)
         return ESP_FAIL;
     }
     return ESP_OK;
+}
+
+esp_err_t Cloud_SetListeningState(bool is_listening)
+{
+    const device_config_t *config = Provisioning_GetConfig();
+    if (strlen(config->device_id) == 0) return ESP_ERR_INVALID_STATE;
+
+    char *url = heap_caps_malloc(256, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    char *post_data = heap_caps_malloc(128, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    char *auth_header = heap_caps_malloc(600, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!url || !post_data || !auth_header) {
+        heap_caps_free(url);
+        heap_caps_free(post_data);
+        heap_caps_free(auth_header);
+        return ESP_ERR_NO_MEM;
+    }
+
+    snprintf(url, 256, "%s/rest/v1/devices?id=eq.%s", config->supabase_url, config->device_id);
+    snprintf(post_data, 128, "{\"is_listening\":%s}", is_listening ? "true" : "false");
+
+    esp_http_client_config_t http_cfg = {
+        .url = url,
+        .method = HTTP_METHOD_PATCH,
+        .timeout_ms = 8000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .buffer_size_tx = 512,
+        .buffer_size = 512
+    };
+    
+    esp_http_client_handle_t client = esp_http_client_init(&http_cfg);
+    if (!client) {
+        heap_caps_free(url);
+        heap_caps_free(post_data);
+        heap_caps_free(auth_header);
+        return ESP_FAIL;
+    }
+
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_header(client, "apikey", config->supabase_anon_key);
+    snprintf(auth_header, 600, "Bearer %s", config->auth_token);
+    esp_http_client_set_header(client, "Authorization", auth_header);
+    esp_http_client_set_post_field(client, post_data, strlen(post_data));
+
+    esp_err_t err = esp_http_client_perform(client);
+    if (err == ESP_OK) {
+        int status_code = esp_http_client_get_status_code(client);
+        ESP_LOGI(TAG, "Listening state set to %s. Status: %d", is_listening ? "true" : "false", status_code);
+    } else {
+        ESP_LOGE(TAG, "Failed to update listening state: %s", esp_err_to_name(err));
+    }
+
+    esp_http_client_cleanup(client);
+    heap_caps_free(url);
+    heap_caps_free(post_data);
+    heap_caps_free(auth_header);
+    return err;
 }

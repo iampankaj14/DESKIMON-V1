@@ -29,6 +29,8 @@ static eye_state_t current_state = EYE_STATE_BOOT;
 
 static uint32_t s_eye_color_hex = 0x00FFFF;
 static volatile bool s_eye_color_pending = false;
+static volatile eye_state_t s_pending_eye_state = EYE_STATE_MAX;
+static volatile bool s_eye_state_pending = false;
 
 // UI Objects
 static lv_obj_t * eye_l;
@@ -471,6 +473,11 @@ static void logic_timer_cb(lv_timer_t * t)
 {
     state_time += 100;
     idle_time += 100;
+
+    if (s_eye_state_pending) {
+        s_eye_state_pending = false;
+        set_eyes_state(s_pending_eye_state);
+    }
 
     if (s_eye_color_pending) {
         s_eye_color_pending = false;
@@ -1063,5 +1070,35 @@ void Deskimon_SetEyeColor(uint32_t color_hex)
 {
     s_eye_color_hex = color_hex;
     s_eye_color_pending = true;
+}
+
+void Deskimon_SetEmotion(const char* emotion)
+{
+    eye_state_t state = EYE_STATE_NORMAL;
+    if (strcmp(emotion, "happy") == 0) {
+        state = EYE_STATE_HAPPY;
+    } else if (strcmp(emotion, "angry") == 0) {
+        state = EYE_STATE_ANGRY;
+    } else if (strcmp(emotion, "sleepy") == 0) {
+        state = EYE_STATE_SLEEP;
+    } else if (strcmp(emotion, "crying") == 0 || strcmp(emotion, "cry") == 0) {
+        state = EYE_STATE_CRY;
+    } else if (strcmp(emotion, "interest") == 0 || strcmp(emotion, "listening") == 0) {
+        state = EYE_STATE_INTEREST;
+    } else if (strcmp(emotion, "ooh") == 0) {
+        state = EYE_STATE_OOH;
+    } else if (strcmp(emotion, "wtf") == 0) {
+        state = EYE_STATE_WTF;
+    } else if (strcmp(emotion, "laugh") == 0) {
+        state = EYE_STATE_LAUGH;
+    } else if (strcmp(emotion, "bored") == 0) {
+        state = EYE_STATE_BORED;
+    } else if (strcmp(emotion, "blush") == 0) {
+        state = EYE_STATE_BLUSH;
+    } else if (strcmp(emotion, "chill") == 0) {
+        state = EYE_STATE_CHILL;
+    }
+    s_pending_eye_state = state;
+    s_eye_state_pending = true;
 }
 
