@@ -23,6 +23,16 @@ dependencies:
       path: /Users/pankaj/Desktop/DESKIMON/components/espressif__esp-sr
       type: local
     version: 1.9.4
+  espressif/esp_websocket_client:
+    component_hash: 3fb288702517ef4d75bf933a115f1056ee0c2540d964f9e1d856e0bb67e1dfeb
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.7.0
   idf:
     source:
       type: idf
@@ -38,8 +48,9 @@ direct_dependencies:
 - chmorgan/esp-libhelix-mp3
 - espressif/esp-dsp
 - espressif/esp-sr
+- espressif/esp_websocket_client
 - idf
 - lvgl/lvgl
-manifest_hash: bfd712c1bbe40a43339ac7b51b0ebc10ccfcee99cd574ab9e26662d2ddbcf7c8
+manifest_hash: e79228ce704ae5af57c0bf3f025560a64c9c5afc10bfecb105d2cffd20e6fc8d
 target: esp32s3
 version: 2.0.0

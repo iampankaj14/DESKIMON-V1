@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS public.devices (
     device_name TEXT NOT NULL DEFAULT 'My Deskimon',
     -- Status
     is_online BOOLEAN NOT NULL DEFAULT FALSE,
+    is_listening BOOLEAN NOT NULL DEFAULT FALSE,
     last_seen_at TIMESTAMPTZ,
     firmware_version TEXT,
     wifi_ssid TEXT,
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS public.device_preferences (
     -- Audio
     volume INTEGER NOT NULL DEFAULT 70 CHECK (volume BETWEEN 0 AND 100),
     tts_voice TEXT NOT NULL DEFAULT 'en-US-Neural2-D',  -- Google TTS voice ID
+    audio_url TEXT,  -- URL to response speech MP3
     -- Behavior
     conversation_timeout_ms INTEGER NOT NULL DEFAULT 15000,
     sleep_after_idle_ms INTEGER NOT NULL DEFAULT 30000,
