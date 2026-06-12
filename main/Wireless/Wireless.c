@@ -50,6 +50,12 @@ void Wireless_Init(void)
             if (Provisioning_GetState() == PROV_STATE_FULLY_PROVISIONED) {
                 ESP_LOGI("Wireless", "Device fully provisioned. Starting database sync...");
                 Cloud_Start();
+                // Configure direct voice API if URL is set in Kconfig
+#ifdef CONFIG_DESKIMON_VOICE_API_URL
+                if (strlen(CONFIG_DESKIMON_VOICE_API_URL) > 0) {
+                    Cloud_SetVoiceApiUrl(CONFIG_DESKIMON_VOICE_API_URL);
+                }
+#endif
             } else {
                 ESP_LOGI("Wireless", "Wi-Fi connected. Waiting for device to be linked in Supabase...");
                 Cloud_StartLinkingTask();

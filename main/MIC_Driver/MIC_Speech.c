@@ -203,12 +203,15 @@ static void write_wav_file(const char *filepath, int16_t *pcm_data, uint32_t num
 static void voice_upload_task(void *pvParameters)
 {
     uint32_t num_samples = (uint32_t)pvParameters;
-    ESP_LOGI(TAG, "Starting audio file upload from RAM...");
-    esp_err_t err = Cloud_UploadVoiceBuffer(s_record_buf, num_samples);
+    ESP_LOGI(TAG, "Starting direct voice processing...");
+    // Cloud_UploadVoiceDirect sends audio directly to the server,
+    // receives MP3 response, and starts playback — all in one HTTP call.
+    // Falls back to Supabase path if no server URL is configured.
+    esp_err_t err = Cloud_UploadVoiceDirect(s_record_buf, num_samples);
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Audio upload completed successfully.");
+        ESP_LOGI(TAG, "Voice processing completed successfully.");
     } else {
-        ESP_LOGE(TAG, "Audio upload failed. Returning to idle.");
+        ESP_LOGE(TAG, "Voice processing failed. Returning to idle.");
         // On upload failure, go back to idle
         transition_to_idle();
     }

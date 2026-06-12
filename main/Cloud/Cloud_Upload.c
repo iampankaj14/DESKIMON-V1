@@ -1,13 +1,28 @@
 #include "Cloud.h"
+#include "MIC_Speech.h"
+#include "PCM5101.h"
 #include <string.h>
 #include <stdio.h>
 #include "esp_log.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "Provisioning.h"
+#include "deskimon.h"
 
 static const char *TAG = "CloudUpload";
+
+// Direct voice API server URL — set via Provisioning or hardcode for dev
+// Format: "http://192.168.1.100:3001" (no trailing slash)
+static const char *s_voice_api_url = NULL;
+
+void Cloud_SetVoiceApiUrl(const char *url)
+{
+    s_voice_api_url = url;
+    ESP_LOGI(TAG, "Voice API URL set to: %s", url ? url : "(null)");
+}
+
 
 esp_err_t Cloud_UploadVoiceFile(const char *filepath)
 {
@@ -302,4 +317,181 @@ esp_err_t Cloud_UploadVoiceBuffer(const int16_t *pcm_data, uint32_t num_samples)
     heap_caps_free(post_data);
 
     return err;
+}
+
+// ============================================================
+// DIRECT VOICE API — POST WAV to server, receive MP3 response
+// Eliminates Supabase storage round-trips (~4-9s latency savings)
+// ============================================================
+
+// HTTP event handler for collecting response data into SPIRAM buffer
+typedef struct {
+    uint8_t *response_buf;
+    int response_len;
+    int response_max;
+} direct_voice_ctx_t;
+
+static esp_err_t direct_voice_http_event(esp_http_client_event_t *evt)
+{
+    direct_voice_ctx_t *ctx = (direct_voice_ctx_t *)evt->user_data;
+    if (!ctx) return ESP_OK;
+
+    switch (evt->event_id) {
+        case HTTP_EVENT_ON_DATA:
+            if (ctx->response_buf && ctx->response_len + evt->data_len <= ctx->response_max) {
+                memcpy(ctx->response_buf + ctx->response_len, evt->data, evt->data_len);
+                ctx->response_len += evt->data_len;
+            } else {
+                ESP_LOGW(TAG, "Direct voice response buffer overflow or not allocated");
+            }
+            break;
+        default:
+            break;
+    }
+    return ESP_OK;
+}
+
+esp_err_t Cloud_UploadVoiceDirect(const int16_t *pcm_data, uint32_t num_samples)
+{
+    // If no direct server URL configured, fall back to Supabase path
+    if (!s_voice_api_url || strlen(s_voice_api_url) == 0) {
+        ESP_LOGI(TAG, "No Voice API URL configured. Using Supabase fallback.");
+        return Cloud_UploadVoiceBuffer(pcm_data, num_samples);
+    }
+
+    const device_config_t *config = Provisioning_GetConfig();
+    if (strlen(config->device_id) == 0) {
+        ESP_LOGE(TAG, "Device not provisioned. Cannot upload.");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // 1. Build WAV in RAM (same as Cloud_UploadVoiceBuffer)
+    uint32_t data_size = num_samples * sizeof(int16_t);
+    uint32_t wav_size = sizeof(wav_header_t) + data_size;
+
+    char *wav_buf = heap_caps_malloc(wav_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!wav_buf) {
+        ESP_LOGE(TAG, "Failed to allocate %d bytes in SPIRAM for WAV buffer", (int)wav_size);
+        return ESP_ERR_NO_MEM;
+    }
+
+    wav_header_t *header = (wav_header_t *)wav_buf;
+    memcpy(header->riff, "RIFF", 4);
+    header->overall_size = data_size + 36;
+    memcpy(header->wave, "WAVE", 4);
+    memcpy(header->fmt_chunk_marker, "fmt ", 4);
+    header->length_of_fmt = 16;
+    header->format_type = 1;
+    header->channels = 1;
+    header->sample_rate = 16000;
+    header->byterate = 16000 * 1 * 2;
+    header->block_align = 1 * 2;
+    header->bits_per_sample = 16;
+    memcpy(header->data_chunk_header, "data", 4);
+    header->data_size = data_size;
+    memcpy(wav_buf + sizeof(wav_header_t), pcm_data, data_size);
+
+    ESP_LOGI(TAG, "Built WAV buffer (%d bytes). POSTing directly to server...", (int)wav_size);
+
+    // 2. Allocate response buffer in SPIRAM (128KB for MP3 response)
+    size_t max_response_size = 128 * 1024;
+    uint8_t *response_buf = heap_caps_malloc(max_response_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!response_buf) {
+        ESP_LOGE(TAG, "Failed to allocate response buffer in SPIRAM");
+        heap_caps_free(wav_buf);
+        return ESP_ERR_NO_MEM;
+    }
+
+    direct_voice_ctx_t ctx = {
+        .response_buf = response_buf,
+        .response_len = 0,
+        .response_max = (int)max_response_size
+    };
+
+    // 3. Build URL: <server_url>/api/voice
+    char *url = heap_caps_malloc(512, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!url) {
+        ESP_LOGE(TAG, "Failed to allocate URL buffer");
+        heap_caps_free(wav_buf);
+        heap_caps_free(response_buf);
+        return ESP_ERR_NO_MEM;
+    }
+    snprintf(url, 512, "%s/api/voice", s_voice_api_url);
+
+    esp_http_client_config_t http_cfg = {
+        .url = url,
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = 30000,  // 30s timeout for AI processing
+        .event_handler = direct_voice_http_event,
+        .user_data = &ctx,
+        .buffer_size_tx = 4096,
+        .buffer_size = 4096,
+        .disable_auto_redirect = true,
+    };
+
+    // Use TLS if server URL starts with https
+    if (strncmp(s_voice_api_url, "https://", 8) == 0) {
+        http_cfg.crt_bundle_attach = esp_crt_bundle_attach;
+    }
+
+    esp_http_client_handle_t client = esp_http_client_init(&http_cfg);
+    if (!client) {
+        ESP_LOGE(TAG, "Failed to initialize direct voice HTTP client");
+        heap_caps_free(wav_buf);
+        heap_caps_free(response_buf);
+        heap_caps_free(url);
+        return ESP_FAIL;
+    }
+
+    // Set headers
+    esp_http_client_set_header(client, "Content-Type", "audio/wav");
+    esp_http_client_set_header(client, "X-Device-Id", config->device_id);
+
+    // Set WAV as POST body
+    esp_http_client_set_post_field(client, wav_buf, wav_size);
+
+    // 4. Perform the request — this blocks until response is received
+    ESP_LOGI(TAG, "Sending WAV to %s ...", url);
+    int64_t start_us = esp_timer_get_time();
+
+    esp_err_t err = esp_http_client_perform(client);
+    int status_code = 0;
+    
+    if (err == ESP_OK) {
+        status_code = esp_http_client_get_status_code(client);
+        int64_t elapsed_ms = (esp_timer_get_time() - start_us) / 1000;
+        ESP_LOGI(TAG, "Direct voice response: HTTP %d, %d bytes MP3, %lld ms round-trip",
+                 status_code, ctx.response_len, elapsed_ms);
+    } else {
+        ESP_LOGE(TAG, "Direct voice request failed: %s", esp_err_to_name(err));
+    }
+
+    // Free WAV buffer (no longer needed)
+    heap_caps_free(wav_buf);
+    esp_http_client_cleanup(client);
+    heap_caps_free(url);
+
+    // 5. Handle response
+    if (err != ESP_OK || status_code != 200 || ctx.response_len == 0) {
+        ESP_LOGW(TAG, "Direct path failed (HTTP %d, %d bytes). Falling back to Supabase...",
+                 status_code, ctx.response_len);
+        heap_caps_free(response_buf);
+        // Rebuild WAV and use legacy path as fallback
+        return Cloud_UploadVoiceBuffer(pcm_data, num_samples);
+    }
+
+    // 6. Play the MP3 response directly from the response buffer!
+    ESP_LOGI(TAG, "Direct voice success! Playing %d byte MP3 response immediately.", ctx.response_len);
+    
+    MIC_SetConvState(CONV_STATE_SPEAKING);
+    Deskimon_SetEmotion("happy");
+    Play_Music_From_Buffer(response_buf, ctx.response_len);
+
+    // NOTE: response_buf ownership transfers to the audio player.
+    // It will be freed when the next audio download or direct voice call happens
+    // (via the s_mp3_play_buf pattern in Cloud.c audio_download_task).
+    // For safety, we track it the same way:
+    Cloud_SetPlayBuffer(response_buf);
+
+    return ESP_OK;
 }

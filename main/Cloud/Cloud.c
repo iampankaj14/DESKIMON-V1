@@ -818,3 +818,12 @@ esp_err_t Cloud_SetListeningState(bool is_listening)
     heap_caps_free(auth_header);
     return err;
 }
+
+void Cloud_SetPlayBuffer(uint8_t *buf)
+{
+    if (s_mp3_play_buf && s_mp3_play_buf != buf) {
+        heap_caps_free(s_mp3_play_buf);
+    }
+    s_mp3_play_buf = buf;
+}
+

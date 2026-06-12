@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 const { createClient } = require('@supabase/supabase-js');
 const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
 
@@ -23,6 +24,7 @@ if (fs.existsSync(envPath)) {
 const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const GEMINI_API_KEY = env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+const VOICE_API_PORT = parseInt(env.VOICE_API_PORT || process.env.VOICE_API_PORT || '3001', 10);
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error("Error: Supabase configuration is missing from .env.local");
@@ -142,10 +144,247 @@ class ConversationManager {
 const conversations = new ConversationManager(60000, 10);
 
 // ============================================================
-// VOICE INPUT HANDLER — Multi-turn conversation support
+// CORE VOICE PROCESSING — Gemini + TTS (shared by both paths)
 // ============================================================
 
-// Guard against duplicate processing of the same voice query
+/**
+ * Process a voice audio buffer: send to Gemini, synthesize TTS, return MP3.
+ * This is the core AI pipeline, independent of transport (HTTP or Supabase).
+ *
+ * @param {string} deviceId - Device UUID
+ * @param {Buffer} audioBuffer - Raw WAV audio bytes
+ * @returns {Promise<{mp3Buffer: Buffer, aiResponse: string}>}
+ */
+async function processVoiceAudio(deviceId, audioBuffer) {
+  const startTime = Date.now();
+  const session = conversations.getOrCreate(deviceId);
+  const turnNumber = Math.floor(session.turns.length / 2) + 1;
+  const isFollowUp = session.turns.length > 0;
+
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`[Voice] ${isFollowUp ? 'FOLLOW-UP' : 'NEW CONVERSATION'} — Turn #${turnNumber} for device ${deviceId.substring(0, 8)}...`);
+  console.log(`${'='.repeat(60)}`);
+
+  // A. Build multi-turn Gemini request with conversation history
+  const base64Audio = audioBuffer.toString('base64');
+  const contents = [];
+
+  // Add previous turns as text context
+  for (const turn of session.turns) {
+    contents.push({
+      role: turn.role,
+      parts: [{ text: turn.text }]
+    });
+  }
+
+  // Add current audio query as the latest user turn
+  const currentUserParts = [
+    {
+      inlineData: {
+        mimeType: "audio/wav",
+        data: base64Audio
+      }
+    }
+  ];
+
+  if (isFollowUp) {
+    currentUserParts.push({
+      text: "Continue our conversation naturally. Answer the user's spoken follow-up question. Keep it brief."
+    });
+  } else {
+    currentUserParts.push({
+      text: "Answer the user's spoken question."
+    });
+  }
+
+  contents.push({
+    role: 'user',
+    parts: currentUserParts
+  });
+
+  const requestBody = {
+    systemInstruction: {
+      parts: [{
+        text: "You are DESKIMON, a smart, funny, and expressive desk companion. " +
+              "You are having a real-time voice conversation. " +
+              "Keep every response extremely brief — maximum 120 characters, 1-2 short sentences. " +
+              "Be engaging, witty, and remember context from earlier in the conversation. " +
+              "Never mention that you're an AI or that you received audio data."
+      }]
+    },
+    contents
+  };
+
+  // B. Call Gemini API
+  const modelsToTry = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+  let aiResponse = null;
+  let lastError = null;
+
+  for (const model of modelsToTry) {
+    try {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+      console.log(`[Voice] Calling Gemini API (${model})...`);
+      const geminiStart = Date.now();
+      const geminiRes = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text();
+        throw new Error(`HTTP ${geminiRes.status}. Details: ${errText}`);
+      }
+
+      const resJson = await geminiRes.json();
+      aiResponse = resJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (aiResponse) {
+        console.log(`[Voice] Gemini (${model}) response in ${Date.now() - geminiStart}ms: "${aiResponse}"`);
+        break;
+      }
+    } catch (err) {
+      console.warn(`[Voice] Warning: Model ${model} failed:`, err.message);
+      lastError = err;
+    }
+  }
+
+  if (!aiResponse) {
+    throw new Error(`All Gemini models failed. Last error: ${lastError?.message}`);
+  }
+
+  // Save turn to conversation history
+  conversations.addTurn(deviceId, '[Audio query]', aiResponse);
+
+  // C. Synthesize Speech using Microsoft Edge TTS
+  console.log("[Voice] Synthesizing response via Edge TTS...");
+  const ttsStart = Date.now();
+
+  const tts = new MsEdgeTTS();
+  await tts.setMetadata("en-US-EmmaMultilingualNeural", OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+
+  const { audioStream } = tts.toStream(aiResponse, { rate: "+40%" });
+
+  // Collect stream into buffer (no temp file needed)
+  const chunks = [];
+  await new Promise((resolve, reject) => {
+    audioStream.on('data', (chunk) => chunks.push(chunk));
+    audioStream.on('end', resolve);
+    audioStream.on('error', reject);
+  });
+
+  const mp3Buffer = Buffer.concat(chunks);
+  const totalMs = Date.now() - startTime;
+  console.log(`[Voice] TTS done in ${Date.now() - ttsStart}ms. MP3 size: ${mp3Buffer.length} bytes. Total processing: ${totalMs}ms`);
+
+  return { mp3Buffer, aiResponse, isFollowUp, turnNumber, totalMs };
+}
+
+// ============================================================
+// DIRECT HTTP VOICE API — ESP32 POSTs WAV, gets MP3 response
+// Eliminates all Supabase storage round-trips (~4-9s savings)
+// ============================================================
+
+function startVoiceApiServer() {
+  const server = http.createServer(async (req, res) => {
+    // CORS headers for flexibility
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Device-Id, Authorization');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/api/voice') {
+      const deviceId = req.headers['x-device-id'];
+      if (!deviceId) {
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        res.end('Missing X-Device-Id header');
+        return;
+      }
+
+      console.log(`\n[HTTP API] Received direct voice request from device ${deviceId.substring(0, 8)}...`);
+      const receiveStart = Date.now();
+
+      // Collect the request body (WAV audio)
+      const bodyChunks = [];
+      req.on('data', (chunk) => bodyChunks.push(chunk));
+      req.on('end', async () => {
+        const audioBuffer = Buffer.concat(bodyChunks);
+        console.log(`[HTTP API] Received ${audioBuffer.length} bytes in ${Date.now() - receiveStart}ms`);
+
+        try {
+          // Process audio: Gemini + TTS
+          const result = await processVoiceAudio(deviceId, audioBuffer);
+
+          // Return MP3 directly in response — no Supabase round-trip!
+          res.writeHead(200, {
+            'Content-Type': 'audio/mpeg',
+            'Content-Length': result.mp3Buffer.length,
+            'X-AI-Response': Buffer.from(result.aiResponse).toString('base64'),
+            'X-Processing-Ms': result.totalMs.toString()
+          });
+          res.end(result.mp3Buffer);
+
+          console.log(`[HTTP API] Sent ${result.mp3Buffer.length} byte MP3 response. Total: ${result.totalMs}ms`);
+
+          // Log interaction asynchronously (non-blocking)
+          supabase
+            .from('interactions')
+            .insert({
+              device_id: deviceId,
+              interaction_type: 'voice',
+              user_input: result.isFollowUp ? `[Follow-up #${result.turnNumber}]` : '[New conversation]',
+              ai_response: result.aiResponse,
+              emotion_triggered: 'happy',
+              latency_ms: result.totalMs
+            })
+            .then(() => console.log(`[HTTP API] Interaction logged.`))
+            .catch((err) => console.warn(`[HTTP API] Failed to log interaction:`, err.message));
+
+        } catch (err) {
+          console.error('[HTTP API] Error processing voice:', err.message);
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end(`Processing error: ${err.message}`);
+        }
+      });
+
+      req.on('error', (err) => {
+        console.error('[HTTP API] Request stream error:', err.message);
+        res.writeHead(400, { 'Content-Type': 'text/plain' });
+        res.end('Request error');
+      });
+
+    } else if (req.method === 'GET' && req.url === '/health') {
+      // Health check endpoint
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        status: 'ok',
+        activeConversations: conversations.activeCount,
+        uptime: process.uptime()
+      }));
+
+    } else {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not found');
+    }
+  });
+
+  server.listen(VOICE_API_PORT, '0.0.0.0', () => {
+    console.log(`\n[HTTP API] ⚡ Direct Voice API listening on port ${VOICE_API_PORT}`);
+    console.log(`[HTTP API] ESP32 should POST WAV to http://<server-ip>:${VOICE_API_PORT}/api/voice`);
+    console.log(`[HTTP API] Health check: http://localhost:${VOICE_API_PORT}/health\n`);
+  });
+
+  return server;
+}
+
+// ============================================================
+// SUPABASE VOICE HANDLER — Legacy/fallback path
+// Kept for backward compatibility and web dashboard triggers
+// ============================================================
+
 let lastProcessedUrl = null;
 
 async function handleVoiceInput(deviceId, voiceQueryUrl) {
@@ -156,15 +395,8 @@ async function handleVoiceInput(deviceId, voiceQueryUrl) {
   }
   lastProcessedUrl = voiceQueryUrl;
 
-  const session = conversations.getOrCreate(deviceId);
-  const turnNumber = Math.floor(session.turns.length / 2) + 1;
-  const isFollowUp = session.turns.length > 0;
+  console.log(`[Voice/Supabase] Processing via legacy Supabase path: ${voiceQueryUrl}`);
 
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`[Voice] ${isFollowUp ? 'FOLLOW-UP' : 'NEW CONVERSATION'} — Turn #${turnNumber} for device ${deviceId.substring(0, 8)}...`);
-  console.log(`[Voice] Processing: ${voiceQueryUrl}`);
-  console.log(`${'='.repeat(60)}`);
-  
   try {
     // A. Download WAV file from Supabase Storage
     const downloadRes = await fetch(voiceQueryUrl);
@@ -172,127 +404,16 @@ async function handleVoiceInput(deviceId, voiceQueryUrl) {
       throw new Error(`Failed to download audio file: HTTP ${downloadRes.status}`);
     }
     const audioBuffer = Buffer.from(await downloadRes.arrayBuffer());
-    const base64Audio = audioBuffer.toString('base64');
-    console.log(`[Voice] Downloaded WAV file (${audioBuffer.length} bytes). Calling Gemini...`);
+    console.log(`[Voice/Supabase] Downloaded WAV file (${audioBuffer.length} bytes).`);
 
-    // B. Build multi-turn Gemini request with conversation history
-    // Build the contents array with conversation history
-    const contents = [];
+    // B. Process audio using shared pipeline
+    const result = await processVoiceAudio(deviceId, audioBuffer);
 
-    // Add previous turns as text context
-    for (const turn of session.turns) {
-      contents.push({
-        role: turn.role,
-        parts: [{ text: turn.text }]
-      });
-    }
-
-    // Add current audio query as the latest user turn
-    const currentUserParts = [
-      {
-        inlineData: {
-          mimeType: "audio/wav",
-          data: base64Audio
-        }
-      }
-    ];
-
-    // Add contextual instruction based on whether this is a follow-up
-    if (isFollowUp) {
-      currentUserParts.push({
-        text: "Continue our conversation naturally. Answer the user's spoken follow-up question. Keep it brief."
-      });
-    } else {
-      currentUserParts.push({
-        text: "Answer the user's spoken question."
-      });
-    }
-
-    contents.push({
-      role: 'user',
-      parts: currentUserParts
-    });
-
-    const requestBody = {
-      systemInstruction: {
-        parts: [{
-          text: "You are DESKIMON, a smart, funny, and expressive desk companion. " +
-                "You are having a real-time voice conversation. " +
-                "Keep every response extremely brief — maximum 120 characters, 1-2 short sentences. " +
-                "Be engaging, witty, and remember context from earlier in the conversation. " +
-                "Never mention that you're an AI or that you received audio data."
-        }]
-      },
-      contents
-    };
-
-    const modelsToTry = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
-    let aiResponse = null;
-    let lastError = null;
-
-    for (const model of modelsToTry) {
-      try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-        console.log(`[Voice] Calling Gemini API (${model})...`);
-        const geminiRes = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(requestBody)
-        });
-
-        if (!geminiRes.ok) {
-          const errText = await geminiRes.text();
-          throw new Error(`HTTP ${geminiRes.status}. Details: ${errText}`);
-        }
-
-        const resJson = await geminiRes.json();
-        aiResponse = resJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (aiResponse) {
-          console.log(`[Voice] Gemini (${model}) response: "${aiResponse}"`);
-          break;
-        }
-      } catch (err) {
-        console.warn(`[Voice] Warning: Model ${model} failed:`, err.message);
-        lastError = err;
-      }
-    }
-
-    if (!aiResponse) {
-      throw new Error(`All Gemini models failed. Last error: ${lastError?.message}`);
-    }
-
-    // Save turn to conversation history
-    conversations.addTurn(deviceId, '[Audio query]', aiResponse);
-
-    // C. Synthesize Speech using Microsoft Edge TTS with fast speed rate (+40%)
-    console.log("[Voice] Synthesizing response via Edge TTS (voice: en-US-EmmaMultilingualNeural, rate: +40%)...");
-    
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata("en-US-EmmaMultilingualNeural", OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-    
-    const { audioStream } = tts.toStream(aiResponse, { rate: "+40%" });
-    
-    // Write stream to local temporary MP3 file
-    const tempFile = path.join(__dirname, 'temp_response.mp3');
-    const writeStream = fs.createWriteStream(tempFile);
-    
-    await new Promise((resolve, reject) => {
-      writeStream.on('finish', resolve);
-      writeStream.on('error', reject);
-      audioStream.on('error', reject);
-      audioStream.pipe(writeStream);
-    });
-
-    const mp3Buffer = fs.readFileSync(tempFile);
-    console.log(`[Voice] Speech synthesized. Size: ${mp3Buffer.length} bytes. Uploading response...`);
-
-    // D. Upload MP3 to Supabase Storage
+    // C. Upload MP3 to Supabase Storage (legacy path still needs this)
     const storagePath = `responses/${deviceId}_response.mp3`;
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('audio')
-      .upload(storagePath, mp3Buffer, {
+      .upload(storagePath, result.mp3Buffer, {
         contentType: 'audio/mpeg',
         upsert: true
       });
@@ -301,18 +422,14 @@ async function handleVoiceInput(deviceId, voiceQueryUrl) {
       throw uploadError;
     }
 
-    // Clean up local temp file
-    fs.unlinkSync(tempFile);
-
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('audio')
       .getPublicUrl(storagePath);
 
-    console.log(`[Voice] Uploaded response MP3: ${publicUrl}`);
+    console.log(`[Voice/Supabase] Uploaded response MP3: ${publicUrl}`);
 
-    // E. Update device_preferences audio_url to trigger ESP32 playback
-    console.log(`[Voice] Writing audio_url to device preferences...`);
+    // D. Update device_preferences audio_url to trigger ESP32 playback
     const { error: prefError } = await supabase
       .from('device_preferences')
       .update({ audio_url: publicUrl })
@@ -322,37 +439,32 @@ async function handleVoiceInput(deviceId, voiceQueryUrl) {
       throw prefError;
     }
 
-    // F. Log interaction in db
+    // E. Log interaction in db
     await supabase
       .from('interactions')
       .insert({
         device_id: deviceId,
         interaction_type: 'voice',
-        user_input: isFollowUp ? `[Follow-up #${turnNumber}]` : '[New conversation]',
-        ai_response: aiResponse,
+        user_input: result.isFollowUp ? `[Follow-up #${result.turnNumber}]` : '[New conversation]',
+        ai_response: result.aiResponse,
         emotion_triggered: 'happy',
-        latency_ms: 500
+        latency_ms: result.totalMs
       });
 
-    // G. Clear audio_url after a delay so ESP32 can consume it first.
-    // In continuous conversation mode, the ESP32 state machine handles the
-    // next listen cycle automatically. We still clear audio_url to reset
-    // the trigger for the next query.
+    // F. Clear audio_url after delay
     setTimeout(async () => {
       await supabase
         .from('device_preferences')
         .update({ audio_url: null })
         .eq('device_id', deviceId);
-      console.log(`[Voice] Cleared preferences audio_url.`);
+      console.log(`[Voice/Supabase] Cleared preferences audio_url.`);
     }, 4000);
 
   } catch (err) {
-    console.error("[Voice] Error processing voice interaction:", err);
+    console.error("[Voice/Supabase] Error processing voice interaction:", err);
   } finally {
-    // H. Reset devices.voice_query_url so it can be re-triggered.
-    // NOTE: We do NOT reset is_listening here — the ESP32 state machine
-    // manages listening state based on follow-up timer / conversation flow.
-    console.log(`[Voice] Resetting voice_query_url for next trigger...`);
+    // Reset voice_query_url
+    console.log(`[Voice/Supabase] Resetting voice_query_url for next trigger...`);
     lastProcessedUrl = null;
     await supabase
       .from('devices')
@@ -361,13 +473,15 @@ async function handleVoiceInput(deviceId, voiceQueryUrl) {
   }
 }
 
-// 5. Main Loop — Polling + Realtime (belt-and-suspenders)
+// 5. Main Loop — HTTP API + Polling + Realtime
 async function run() {
   await authenticate();
-  
+
+  // Start the direct HTTP Voice API server
+  startVoiceApiServer();
+
   console.log("\n╔══════════════════════════════════════════════════════════╗");
-  console.log("║   DESKIMON AI Daemon v2.1 — Polling + Realtime        ║");
-  console.log("║   Watching for voice queries on 'devices' table...    ║");
+  console.log("║   DESKIMON AI Daemon v3.0 — Direct API + Fallback     ║");
   console.log("╚══════════════════════════════════════════════════════════╝\n");
   
   // --- REALTIME (bonus, may not work depending on Supabase config) ---
