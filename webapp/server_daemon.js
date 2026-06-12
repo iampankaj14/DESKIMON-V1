@@ -260,9 +260,9 @@ async function processVoiceAudio(deviceId, audioBuffer) {
   const ttsStart = Date.now();
 
   const tts = new MsEdgeTTS();
-  await tts.setMetadata("en-US-EmmaMultilingualNeural", OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+  await tts.setMetadata("en-US-AvaNeural", OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
 
-  const { audioStream } = tts.toStream(aiResponse, { rate: "+40%" });
+  const { audioStream } = tts.toStream(aiResponse, { rate: "+10%" });
 
   // Collect stream into buffer (no temp file needed)
   const chunks = [];
