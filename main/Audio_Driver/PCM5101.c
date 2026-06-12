@@ -153,6 +153,36 @@ void Play_Music(const char* directory, const char* fileName)
         return;
     }
 }
+void Play_Music_From_Buffer(uint8_t *buffer, size_t size)
+{
+    Music_pause();
+    Music_File = fmemopen(buffer, size, "rb");
+    if (!Music_File) {
+        ESP_LOGE(TAG, "Failed to fmemopen buffer");
+        return;
+    }
+
+    expected_event = AUDIO_PLAYER_CALLBACK_EVENT_PLAYING;
+    esp_err_t ret = audio_player_play(Music_File);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to play audio from buffer: %s", esp_err_to_name(ret));
+        fclose(Music_File);
+        Music_File = NULL;
+        return;
+    }
+    if (xQueueReceive(event_queue, &event, pdMS_TO_TICKS(200)) != pdPASS) {
+        ESP_LOGE(TAG, "Failed to receive playing event from buffer");
+        fclose(Music_File);
+        Music_File = NULL;
+        return;
+    }
+    if (audio_player_get_state() != AUDIO_PLAYER_STATE_PLAYING) {
+        ESP_LOGE(TAG, "Expected state to be PLAYING after buffer play");
+        fclose(Music_File);
+        Music_File = NULL;
+        return;
+    }
+}
 void Music_resume(void)
 {
     if (audio_player_get_state() != AUDIO_PLAYER_STATE_PLAYING){

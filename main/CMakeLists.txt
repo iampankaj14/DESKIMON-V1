@@ -19,6 +19,7 @@ idf_component_register(
                               "./Provisioning/Provisioning.c"
                               "./Provisioning/dns_server.c"
                               "./Cloud/Cloud.c"
+                              "./Cloud/Cloud_Upload.c"
 
                          INCLUDE_DIRS 
                               "./Audio_Driver" 

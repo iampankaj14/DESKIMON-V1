@@ -34,6 +34,18 @@ typedef enum
     COMMAND_ID6 = 5,
 } command_word_t;
 
+// ============================================================
+// CONVERSATION STATE MACHINE
+// ============================================================
+typedef enum {
+    CONV_STATE_IDLE = 0,            // Wake word detection active
+    CONV_STATE_WAKE_DETECTED,       // Wake word just fired, waiting for channel verify
+    CONV_STATE_LISTENING,           // Recording user speech (VAD active)
+    CONV_STATE_PROCESSING,          // Audio uploaded, waiting for AI response
+    CONV_STATE_SPEAKING,            // Playing audio response (mic muted)
+    CONV_STATE_FOLLOWUP_LISTENING,  // Post-response listening window (15s timer)
+} conv_state_t;
+
 typedef struct {
     const esp_afe_sr_iface_t *afe_handle;
     esp_afe_sr_data_t *afe_data;
@@ -42,5 +54,10 @@ typedef struct {
     command_word_t command;
 } AppSpeech;
 
-void MIC_Speech_init();
+// Core init
+void MIC_Speech_init(void);
+
+// Conversation state machine API (called from Cloud module)
+conv_state_t MIC_GetConvState(void);
+void MIC_SetConvState(conv_state_t new_state);
 

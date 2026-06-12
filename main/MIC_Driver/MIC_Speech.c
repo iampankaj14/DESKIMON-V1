@@ -1,6 +1,8 @@
 #include "MIC_Speech.h"
 #include "Cloud.h"
 #include "deskimon.h"
+#include "PCM5101.h"
+#include "esp_heap_caps.h"
 
 #include "driver/gpio.h"
 #include "driver/i2s_std.h"
@@ -15,7 +17,18 @@
 #include "esp_mn_iface.h"
 #include "esp_mn_models.h"
 
+#include "freertos/timers.h"
+
 #define I2S_CHANNEL_NUM 1
+
+// Follow-up listening configuration
+#define FOLLOWUP_TIMEOUT_MS      15000   // 15-second follow-up window
+#define PROCESSING_TIMEOUT_MS    30000   // 30-second max wait for AI response
+#define SPEECH_ENERGY_THRESHOLD  250     // Energy threshold for speech detection
+#define SPEECH_ONSET_SAMPLES     (16000 * 0.15f)  // 150ms of speech to confirm onset
+#define SETTLING_DELAY_MS        300     // Post-playback settling time before listening
+#define MIN_RECORDING_SECONDS    0.8f    // Minimum recording before silence check
+#define SILENCE_DURATION_SECONDS 0.6f    // Consecutive silence to stop recording
 
 static const char *TAG = "App/Speech";
 
@@ -24,6 +37,204 @@ static AppSpeech MIC_Speech;
 bool play_Music_Flag = 0;
 uint8_t LCD_Backlight_original = 0;
 
+// ============================================================
+// CONVERSATION STATE MACHINE
+// ============================================================
+static volatile conv_state_t s_conv_state = CONV_STATE_IDLE;
+static TimerHandle_t s_followup_timer = NULL;
+static uint32_t s_processing_start_tick = 0;
+
+// ============================================================
+// VOICE RECORDING STATE
+// ============================================================
+static bool s_recording_active = false;
+static int16_t *s_record_buf = NULL;
+static uint32_t s_record_index = 0;
+static const uint32_t s_record_max_samples = 16000 * 5; // 5 seconds of 16kHz audio
+
+// Follow-up speech onset detection
+static uint32_t s_consecutive_speech_samples = 0;
+static bool s_settling_active = false;
+static uint32_t s_settling_start_tick = 0;
+
+typedef struct {
+    char riff[4];           // "RIFF"
+    uint32_t overall_size;   // file size - 8
+    char wave[4];           // "WAVE"
+    char fmt_chunk_marker[4]; // "fmt "
+    uint32_t length_of_fmt;  // 16
+    uint16_t format_type;    // 1 for PCM
+    uint16_t channels;       // 1 for mono, 2 for stereo
+    uint32_t sample_rate;    // 16000
+    uint32_t byterate;       // sample_rate * channels * (bits_per_sample/8)
+    uint16_t block_align;    // channels * (bits_per_sample/8)
+    uint16_t bits_per_sample;// 16
+    char data_chunk_header[4]; // "data"
+    uint32_t data_size;      // number of bytes of PCM data
+} __attribute__((packed)) wav_header_t;
+
+// ============================================================
+// PUBLIC API — STATE MACHINE
+// ============================================================
+
+conv_state_t MIC_GetConvState(void)
+{
+    return s_conv_state;
+}
+
+void MIC_SetConvState(conv_state_t new_state)
+{
+    ESP_LOGI(TAG, "State transition: %d -> %d", (int)s_conv_state, (int)new_state);
+    s_conv_state = new_state;
+}
+
+// ============================================================
+// FOLLOW-UP TIMER
+// ============================================================
+
+static void followup_timer_callback(TimerHandle_t xTimer)
+{
+    ESP_LOGI(TAG, "Follow-up timeout (%d ms). Returning to IDLE.", FOLLOWUP_TIMEOUT_MS);
+    s_conv_state = CONV_STATE_IDLE;
+    s_recording_active = false;
+    s_consecutive_speech_samples = 0;
+    
+    // Re-enable wake word detection
+    if (MIC_Speech.afe_handle && MIC_Speech.afe_data) {
+        MIC_Speech.afe_handle->enable_wakenet(MIC_Speech.afe_data);
+    }
+    MIC_Speech.detected = false;
+    LCD_Backlight = LCD_Backlight_original;
+    Cloud_SetListeningState(false);
+    Deskimon_SetEmotion("normal");
+}
+
+static void start_followup_timer(void)
+{
+    if (s_followup_timer) {
+        // xTimerReset will start the timer if not running, or restart it if running.
+        // This guarantees only one timer is ever active.
+        xTimerReset(s_followup_timer, pdMS_TO_TICKS(100));
+        ESP_LOGI(TAG, "Follow-up timer started/reset (%d ms)", FOLLOWUP_TIMEOUT_MS);
+    }
+}
+
+static void cancel_followup_timer(void)
+{
+    if (s_followup_timer) {
+        xTimerStop(s_followup_timer, pdMS_TO_TICKS(100));
+        ESP_LOGI(TAG, "Follow-up timer cancelled");
+    }
+}
+
+// ============================================================
+// HELPER: Transition to IDLE (centralized cleanup)
+// ============================================================
+
+static void transition_to_idle(void)
+{
+    ESP_LOGI(TAG, "Transitioning to IDLE state");
+    cancel_followup_timer();
+    s_conv_state = CONV_STATE_IDLE;
+    s_recording_active = false;
+    s_record_index = 0;
+    s_consecutive_speech_samples = 0;
+    s_settling_active = false;
+
+    // Re-enable wake word detection
+    if (MIC_Speech.afe_handle && MIC_Speech.afe_data) {
+        MIC_Speech.afe_handle->enable_wakenet(MIC_Speech.afe_data);
+    }
+    MIC_Speech.detected = false;
+    LCD_Backlight = LCD_Backlight_original;
+    Cloud_SetListeningState(false);
+    Deskimon_SetEmotion("normal");
+}
+
+// ============================================================
+// HELPER: Start recording
+// ============================================================
+
+static void start_recording(void)
+{
+    s_record_index = 0;
+    s_recording_active = true;
+    s_consecutive_speech_samples = 0;
+    ESP_LOGI(TAG, "Voice recording started (max %d seconds)...", (int)(s_record_max_samples / 16000));
+}
+
+// ============================================================
+// WAV FILE WRITING
+// ============================================================
+
+static void write_wav_file(const char *filepath, int16_t *pcm_data, uint32_t num_samples)
+{
+    FILE *f = fopen(filepath, "wb");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open %s for writing", filepath);
+        return;
+    }
+    
+    wav_header_t header;
+    memcpy(header.riff, "RIFF", 4);
+    header.overall_size = num_samples * sizeof(int16_t) + 36;
+    memcpy(header.wave, "WAVE", 4);
+    memcpy(header.fmt_chunk_marker, "fmt ", 4);
+    header.length_of_fmt = 16;
+    header.format_type = 1; // PCM
+    header.channels = 1; // Mono
+    header.sample_rate = 16000;
+    header.byterate = 16000 * 1 * 2;
+    header.block_align = 1 * 2;
+    header.bits_per_sample = 16;
+    memcpy(header.data_chunk_header, "data", 4);
+    header.data_size = num_samples * sizeof(int16_t);
+    
+    fwrite(&header, 1, sizeof(header), f);
+    fwrite(pcm_data, sizeof(int16_t), num_samples, f);
+    fclose(f);
+    ESP_LOGI(TAG, "Wrote WAV file to %s. Samples: %d", filepath, (int)num_samples);
+}
+
+// ============================================================
+// VOICE UPLOAD TASK
+// ============================================================
+
+static void voice_upload_task(void *pvParameters)
+{
+    uint32_t num_samples = (uint32_t)pvParameters;
+    ESP_LOGI(TAG, "Starting audio file upload from RAM...");
+    esp_err_t err = Cloud_UploadVoiceBuffer(s_record_buf, num_samples);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Audio upload completed successfully.");
+    } else {
+        ESP_LOGE(TAG, "Audio upload failed. Returning to idle.");
+        // On upload failure, go back to idle
+        transition_to_idle();
+    }
+    vTaskDelete(NULL);
+}
+
+// ============================================================
+// HELPER: Finish recording and start upload
+// ============================================================
+
+static void finish_recording_and_upload(uint32_t num_samples)
+{
+    s_recording_active = false;
+    s_conv_state = CONV_STATE_PROCESSING;
+    s_processing_start_tick = xTaskGetTickCount();
+    
+    ESP_LOGI(TAG, "Recording complete (%d samples). Uploading from RAM...", (int)num_samples);
+    Deskimon_SetEmotion("interest");
+    
+    // Create transient upload task
+    xTaskCreatePinnedToCore(voice_upload_task, "voice_upload", 8192, (void *)num_samples, 5, NULL, 1);
+}
+
+// ============================================================
+// I2S INITIALIZATION
+// ============================================================
 
 static esp_err_t i2s_init(i2s_port_t i2s_num, uint32_t sample_rate, int channel_format, int bits_per_chan)
 {
@@ -42,39 +253,146 @@ static esp_err_t i2s_init(i2s_port_t i2s_num, uint32_t sample_rate, int channel_
     return ret_val;
 }
 
+// ============================================================
+// FEED HANDLER — Mic data acquisition + recording + speech onset
+// ============================================================
+
 static void feed_handler(AppSpeech *self)
 {
     esp_afe_sr_data_t *afe_data = self->afe_data;
     int audio_chunksize = self->afe_handle->get_feed_chunksize(afe_data);
-    int nch = self->afe_handle->get_channel_num(afe_data);
-    (void)nch;
     size_t samp_len = audio_chunksize;
     size_t samp_len_bytes = samp_len * I2S_CHANNEL_NUM * sizeof(int32_t);
     int32_t *i2s_buff = (int32_t *)malloc(samp_len_bytes);
     assert(i2s_buff);
+    // Properly typed 16-bit buffer for AFE feed — avoids int32->int16 cast corruption
+    int16_t *feed_buf = (int16_t *)malloc(samp_len * sizeof(int16_t));
+    assert(feed_buf);
     size_t bytes_read;
-    // FILE *fp = fopen("/sdcard/out", "a+");
-    // if (fp == NULL) ESP_LOGE(TAG,"can not open file\n");
+
+    // VAD state for recording
+    static uint32_t consecutive_silence_samples = 0;
 
     while (true)
     {
         i2s_channel_read(rx_handle, i2s_buff, samp_len_bytes, &bytes_read, portMAX_DELAY);
 
+        // Convert 32-bit I2S samples to proper 16-bit samples
         for (int i = 0; i < samp_len; ++i)
         {
-            i2s_buff[i] = i2s_buff[i] >> 14; // 32:8 is the significant bit, 8:0 is the low 8 bits, all 0, the AFE input is 16 bits of voice data, the 29:13 bit is to amplify the voice signal.
+            feed_buf[i] = (int16_t)(i2s_buff[i] >> 14);
         }
-        // FatfsComboWrite(i2s_buff, audio_chunksize * I2S_CHANNEL_NUM * sizeof(int16_t), 1, fp);
 
-        self->afe_handle->feed(afe_data, (int16_t *)i2s_buff);
+        // ============================================================
+        // AUDIO CONFLICT PREVENTION:
+        // During SPEAKING state, discard all mic data.
+        // This prevents Deskimon from hearing its own voice.
+        // ============================================================
+        if (s_conv_state == CONV_STATE_SPEAKING) {
+            // Don't feed AFE, don't record. Complete mic mute.
+            continue;
+        }
+
+        // ============================================================
+        // FOLLOW-UP LISTENING: Speech onset detection
+        // Monitor energy levels to detect when user starts speaking.
+        // Only active in FOLLOWUP_LISTENING state when not yet recording.
+        // ============================================================
+        if (s_conv_state == CONV_STATE_FOLLOWUP_LISTENING && !s_recording_active) {
+            // Handle post-playback settling delay
+            if (s_settling_active) {
+                uint32_t elapsed = (xTaskGetTickCount() - s_settling_start_tick) * portTICK_PERIOD_MS;
+                if (elapsed < SETTLING_DELAY_MS) {
+                    // Still settling — feed AFE but don't analyze energy
+                    self->afe_handle->feed(afe_data, feed_buf);
+                    continue;
+                }
+                s_settling_active = false;
+                ESP_LOGI(TAG, "Post-playback settling complete. Listening for speech...");
+            }
+
+            // Calculate chunk energy
+            long long chunk_sum = 0;
+            for (int i = 0; i < samp_len; ++i) {
+                chunk_sum += abs(feed_buf[i]);
+            }
+            float chunk_avg = (float)chunk_sum / samp_len;
+
+            if (chunk_avg > SPEECH_ENERGY_THRESHOLD) {
+                s_consecutive_speech_samples += samp_len;
+
+                if (s_consecutive_speech_samples >= (uint32_t)SPEECH_ONSET_SAMPLES) {
+                    // Speech confirmed! Transition to recording.
+                    ESP_LOGI(TAG, "Speech detected during follow-up! Starting recording.");
+                    cancel_followup_timer();
+                    s_conv_state = CONV_STATE_LISTENING;
+                    start_recording();
+                    Cloud_SetListeningState(true);
+                    Deskimon_SetEmotion("listening");
+                }
+            } else {
+                s_consecutive_speech_samples = 0;
+            }
+        }
+
+        // ============================================================
+        // ACTIVE RECORDING: Buffer mic samples + VAD silence detection
+        // ============================================================
+        if (s_recording_active && s_record_buf) {
+            if (s_record_index == 0) {
+                consecutive_silence_samples = 0;
+            }
+
+            long long chunk_sum = 0;
+            for (int i = 0; i < samp_len; ++i) {
+                chunk_sum += abs(feed_buf[i]);
+                if (s_record_index < s_record_max_samples) {
+                    s_record_buf[s_record_index++] = feed_buf[i];
+                }
+            }
+
+            float chunk_avg = (float)chunk_sum / samp_len;
+
+            // Wait until minimum recording time has passed before checking for silence
+            if (s_record_index > (uint32_t)(16000 * MIN_RECORDING_SECONDS)) {
+                if (chunk_avg < SPEECH_ENERGY_THRESHOLD) {
+                    consecutive_silence_samples += samp_len;
+                } else {
+                    consecutive_silence_samples = 0;
+                }
+
+                if (consecutive_silence_samples >= (uint32_t)(16000 * SILENCE_DURATION_SECONDS)) {
+                    uint32_t final_samples = s_record_index;
+                    ESP_LOGI(TAG, "Silence detected. Stopping recording at %d samples.", (int)final_samples);
+                    finish_recording_and_upload(final_samples);
+                }
+            }
+
+            // Buffer full — force stop
+            if (s_recording_active && s_record_index >= s_record_max_samples) {
+                ESP_LOGI(TAG, "Recording buffer full. Saving WAV file...");
+                finish_recording_and_upload(s_record_max_samples);
+            }
+        }
+
+        // Feed AFE for wake word / multinet detection (except during SPEAKING)
+        self->afe_handle->feed(afe_data, feed_buf);
     }
     self->afe_handle->destroy(afe_data);
     if (i2s_buff) {
         free(i2s_buff);
         i2s_buff = NULL;
     }
+    if (feed_buf) {
+        free(feed_buf);
+        feed_buf = NULL;
+    }
     vTaskDelete(NULL);
 }
+
+// ============================================================
+// DETECT HANDLER — State machine main loop
+// ============================================================
 
 static void detect_hander(AppSpeech *self)
 {
@@ -92,9 +410,6 @@ static void detect_hander(AppSpeech *self)
     int mu_chunksize = multinet->get_samp_chunksize(model_data);
     assert(mu_chunksize == afe_chunksize);
 
-    // FILE *fp = fopen("/sdcard/out", "w");
-    // if (fp == NULL) ESP_LOGE(TAG,"can not open file\n");
-
     //print active speech commands
     multinet->print_active_speech_commands(model_data);
     ESP_LOGI(TAG, "Ready");
@@ -103,82 +418,177 @@ static void detect_hander(AppSpeech *self)
 
     while (true)
     {
-        afe_fetch_result_t* res = self->afe_handle->fetch(afe_data); 
-        if (!res || res->ret_value == ESP_FAIL) {
-            ESP_LOGE(TAG, "fetch error!\n");
+        // ==========================================================
+        // STATE MACHINE
+        // ==========================================================
+        switch (s_conv_state) {
+
+        // ----------------------------------------------------------
+        // IDLE: Normal wake word detection via AFE
+        // ----------------------------------------------------------
+        case CONV_STATE_IDLE: {
+            afe_fetch_result_t* res = self->afe_handle->fetch(afe_data); 
+            if (!res || res->ret_value == ESP_FAIL) {
+                ESP_LOGE(TAG, "fetch error!\n");
+                vTaskDelay(pdMS_TO_TICKS(50));
+                break;
+            }
+
+            if (res->wakeup_state == WAKENET_DETECTED) {
+                ESP_LOGI(TAG, "=== WAKEWORD DETECTED ===\n");
+                multinet->clean(model_data);
+                LCD_Backlight_original = LCD_Backlight;
+                s_conv_state = CONV_STATE_WAKE_DETECTED;
+                ESP_LOGI(TAG, "State: IDLE -> WAKE_DETECTED");
+            }
             break;
         }
 
-        if (res->wakeup_state == WAKENET_DETECTED) {
-            ESP_LOGI(TAG, "WAKEWORD DETECTED\n");
-	        multinet->clean(model_data);  // clean all status of multinet
-            LCD_Backlight_original = LCD_Backlight;
-        } else if (res->wakeup_state == WAKENET_CHANNEL_VERIFIED) {
-            ESP_LOGI(TAG, "AFE_FETCH_CHANNEL_VERIFIED, channel index: %d\n", res->trigger_channel_id);
-            ESP_LOGI(TAG, ">>> Say your command <<<");
-            self->detected = true;
-            self->afe_handle->disable_wakenet(afe_data);
-            LCD_Backlight = 35;
-            Cloud_SetListeningState(true);
-            Deskimon_SetEmotion("listening");
-        }
+        // ----------------------------------------------------------
+        // WAKE_DETECTED: Wait for channel verification
+        // ----------------------------------------------------------
+        case CONV_STATE_WAKE_DETECTED: {
+            afe_fetch_result_t* res = self->afe_handle->fetch(afe_data); 
+            if (!res || res->ret_value == ESP_FAIL) {
+                ESP_LOGE(TAG, "fetch error during wake verification!\n");
+                transition_to_idle();
+                break;
+            }
 
-        if (self->detected) {
-            esp_mn_state_t mn_state = multinet->detect(model_data, res->data);
-
-            if (mn_state == ESP_MN_STATE_DETECTING) {
-                self->command = COMMAND_NOT_DETECTED;
-                continue;
-            } else if (mn_state == ESP_MN_STATE_DETECTED) {
-                esp_mn_results_t *mn_result = multinet->get_results(model_data);
-                // for (int i = 0; i < mn_result->num; i++) {
-                //     ESP_LOGI(TAG, "TOP %d, command_id: %d, phrase_id: %d, string:%s prob: %f\n", 
-                //     i+1, mn_result->command_id[i], mn_result->phrase_id[i], mn_result->string, mn_result->prob[i]);
-                // }
-                ESP_LOGI(TAG, "TOP %d, command_id: %d, phrase_id: %d, string:%s prob: %f\n", 
-                1, mn_result->command_id[0], mn_result->phrase_id[0], mn_result->string, mn_result->prob[0]);
-                switch (mn_result->command_id[0]) {
-                    case 0:      
-                        LCD_Backlight = 100;  
-                        break;
-                    case 1:     
-                        LCD_Backlight = 30;    
-                        break;
-                    case 2:     
-                        LCD_Backlight = 0;  
-                        break;
-                    case 3:       
-                        LCD_Backlight = 100;   
-                        break;
-                    case 4:                 
-                        play_Music_Flag = 1;              
-                        break;
-                    default: printf("Unknown Command!\r\n"); break;
-                }
-                self->command = (command_word_t)mn_result->command_id[0];
-                // self->afe_handle->enable_wakenet(afe_data);
-                // self->detected = false;
+            if (res->wakeup_state == WAKENET_CHANNEL_VERIFIED) {
+                ESP_LOGI(TAG, "AFE_FETCH_CHANNEL_VERIFIED, channel: %d\n", res->trigger_channel_id);
                 
+                // Disable wake word detection for conversation duration
                 self->afe_handle->disable_wakenet(afe_data);
                 self->detected = true;
-                ESP_LOGI(TAG, ">>> Say your command <<<");
-                self->command = COMMAND_TIMEOUT;
-            } else if (mn_state == ESP_MN_STATE_TIMEOUT) {
-                esp_mn_results_t *mn_result = multinet->get_results(model_data);
-                ESP_LOGI(TAG, "timeout, string:%s\n", mn_result->string);
-                self->command = COMMAND_TIMEOUT;
-                self->afe_handle->enable_wakenet(afe_data);
-                self->detected = false;
-                ESP_LOGI(TAG, ">>> Waiting to be waken up <<<");
-                LCD_Backlight = LCD_Backlight_original;
-                Cloud_SetListeningState(false);
-                Deskimon_SetEmotion("normal");
-                if(play_Music_Flag){
-                    play_Music_Flag = 0;
-                    // Play_Music("/sdcard", "udi.mp3"); // Driver-level playback instead of UI demo
-                    printf("Music playback requested by voice command.\n");
+                
+                // Visual + cloud feedback
+                LCD_Backlight = 35;
+                Cloud_SetListeningState(true);
+                Deskimon_SetEmotion("listening");
+                
+                // Start recording
+                s_conv_state = CONV_STATE_LISTENING;
+                start_recording();
+                ESP_LOGI(TAG, "State: WAKE_DETECTED -> LISTENING");
+            }
+            break;
+        }
+
+        // ----------------------------------------------------------
+        // LISTENING: Recording in progress (handled by feed_handler)
+        // ----------------------------------------------------------
+        case CONV_STATE_LISTENING: {
+            // Recording is handled entirely in feed_handler.
+            // We just yield CPU here and wait for feed_handler to 
+            // transition us to PROCESSING when silence is detected.
+            vTaskDelay(pdMS_TO_TICKS(50));
+            break;
+        }
+
+        // ----------------------------------------------------------
+        // PROCESSING: Waiting for AI response from server
+        // ----------------------------------------------------------
+        case CONV_STATE_PROCESSING: {
+            // Safety timeout: if no response after 30 seconds, give up
+            uint32_t elapsed = (xTaskGetTickCount() - s_processing_start_tick) * portTICK_PERIOD_MS;
+            if (elapsed > PROCESSING_TIMEOUT_MS) {
+                ESP_LOGW(TAG, "Processing timeout (%d ms). Returning to IDLE.", PROCESSING_TIMEOUT_MS);
+                transition_to_idle();
+                break;
+            }
+            // Cloud.c will call MIC_SetConvState(CONV_STATE_SPEAKING) when
+            // audio response arrives and playback starts.
+            vTaskDelay(pdMS_TO_TICKS(100));
+            break;
+        }
+
+        // ----------------------------------------------------------
+        // SPEAKING: Audio response is playing (mic muted in feed_handler)
+        // ----------------------------------------------------------
+        case CONV_STATE_SPEAKING: {
+            static uint32_t speaking_entry_tick = 0;
+            static bool playback_started = false;
+
+            if (speaking_entry_tick == 0) {
+                speaking_entry_tick = xTaskGetTickCount();
+                playback_started = false;
+            }
+
+            audio_player_state_t player_state = audio_player_get_state();
+            if (player_state == AUDIO_PLAYER_STATE_PLAYING) {
+                playback_started = true;
+            }
+
+            uint32_t elapsed_ms = (xTaskGetTickCount() - speaking_entry_tick) * portTICK_PERIOD_MS;
+            bool finished = false;
+
+            if (playback_started) {
+                if (player_state != AUDIO_PLAYER_STATE_PLAYING) {
+                    ESP_LOGI(TAG, "Audio response finished. Entering follow-up listening.");
+                    finished = true;
+                }
+            } else {
+                // If it hasn't started playing after 2 seconds, assume it failed or finished instantly
+                if (elapsed_ms > 2000) {
+                    ESP_LOGW(TAG, "Audio response failed to start within 2s. Transitioning to follow-up.");
+                    finished = true;
                 }
             }
+
+            if (finished) {
+                speaking_entry_tick = 0;
+                playback_started = false;
+
+                // Transition to follow-up listening
+                s_conv_state = CONV_STATE_FOLLOWUP_LISTENING;
+                s_consecutive_speech_samples = 0;
+                s_recording_active = false;
+
+                // Start post-playback settling delay
+                s_settling_active = true;
+                s_settling_start_tick = xTaskGetTickCount();
+
+                // Start the 15-second inactivity timer
+                start_followup_timer();
+
+                // Visual feedback
+                Cloud_SetListeningState(true);
+                Deskimon_SetEmotion("listening");
+
+                ESP_LOGI(TAG, "State: SPEAKING -> FOLLOWUP_LISTENING (settling for %d ms)", SETTLING_DELAY_MS);
+            } else {
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
+            break;
+        }
+
+        // ----------------------------------------------------------
+        // FOLLOWUP_LISTENING: Waiting for user to speak again
+        // ----------------------------------------------------------
+        case CONV_STATE_FOLLOWUP_LISTENING: {
+            // Speech onset detection is handled in feed_handler.
+            // Timer callback handles timeout -> IDLE transition.
+            // feed_handler handles speech detected -> LISTENING transition.
+            vTaskDelay(pdMS_TO_TICKS(50));
+            break;
+        }
+
+        default:
+            ESP_LOGE(TAG, "Unknown conversation state: %d", (int)s_conv_state);
+            transition_to_idle();
+            break;
+        }
+
+        // ==========================================================
+        // MULTINET command detection (only during initial IDLE detection)
+        // This preserves existing voice command functionality
+        // ==========================================================
+        if (self->detected && s_conv_state == CONV_STATE_IDLE) {
+            // We shouldn't be detected AND idle normally,
+            // but handle gracefully just in case
+            self->afe_handle->enable_wakenet(afe_data);
+            self->detected = false;
         }
     }
     if (model_data) {
@@ -189,10 +599,34 @@ static void detect_hander(AppSpeech *self)
     vTaskDelete(NULL);
 }
 
+// ============================================================
+// INITIALIZATION
+// ============================================================
 
 void MIC_Speech_init() 
 {
+    // Allocate recording buffer in external SPIRAM (160KB)
+    s_record_buf = heap_caps_malloc(s_record_max_samples * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_record_buf) {
+        ESP_LOGE(TAG, "Failed to allocate record buffer in SPIRAM!");
+    } else {
+        ESP_LOGI(TAG, "Allocated 160KB record buffer in SPIRAM successfully.");
+    }
    
+    // Create follow-up inactivity timer (one-shot, initially stopped)
+    s_followup_timer = xTimerCreate(
+        "followup_timer",
+        pdMS_TO_TICKS(FOLLOWUP_TIMEOUT_MS),
+        pdFALSE,       // One-shot timer (not auto-reload)
+        NULL,
+        followup_timer_callback
+    );
+    if (!s_followup_timer) {
+        ESP_LOGE(TAG, "Failed to create follow-up timer!");
+    } else {
+        ESP_LOGI(TAG, "Follow-up timer created (%d ms timeout).", FOLLOWUP_TIMEOUT_MS);
+    }
+
     MIC_Speech.afe_handle = &ESP_AFE_SR_HANDLE;
 
     MIC_Speech.detected = false;
@@ -211,7 +645,7 @@ void MIC_Speech_init()
         .vad_mode = VAD_MODE_3,
         .wakenet_model_name = NULL,
         .wakenet_model_name_2 = NULL,
-        .wakenet_mode = DET_MODE_2CH_90,
+        .wakenet_mode = DET_MODE_90,
         .afe_mode = SR_MODE_LOW_COST,
         .afe_perferred_core = 1,
         .afe_perferred_priority = 5,
@@ -232,12 +666,14 @@ void MIC_Speech_init()
     afe_config.se_init = false;
     afe_config.vad_init = false;
     afe_config.afe_ringbuf_size = 10;
-    afe_config.pcm_config.total_ch_num = 2;
+    afe_config.pcm_config.total_ch_num = 1;
     afe_config.pcm_config.mic_num = 1;
-    afe_config.pcm_config.ref_num = 1;
+    afe_config.pcm_config.ref_num = 0;
     afe_config.pcm_config.sample_rate = 16000;
     afe_config.wakenet_model_name = esp_srmodel_filter(MIC_Speech.models, ESP_WN_PREFIX, NULL);
     MIC_Speech.afe_data = MIC_Speech.afe_handle->create_from_config(&afe_config);
     xTaskCreatePinnedToCore((TaskFunction_t)feed_handler, "App/SR/Feed", 4 * 1024, &MIC_Speech, 5, NULL, 1);
     xTaskCreatePinnedToCore((TaskFunction_t)detect_hander, "App/SR/Detect", 5 * 1024, &MIC_Speech, 5, NULL, 1);
+
+    ESP_LOGI(TAG, "MIC Speech initialized with continuous conversation support.");
 }

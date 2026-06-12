@@ -35,6 +35,8 @@ esp_err_t Cloud_ReportDiagnostics(void);
  * @return ESP_OK on success
  */
 esp_err_t Cloud_SetListeningState(bool is_listening);
+esp_err_t Cloud_UploadVoiceFile(const char *filepath);
+esp_err_t Cloud_UploadVoiceBuffer(const int16_t *pcm_data, uint32_t num_samples);
 
 /**
  * @brief Start background task to poll Supabase for device linking/registration

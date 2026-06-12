@@ -45,6 +45,7 @@ extern bool Music_Next_Flag;
 extern uint8_t Volume;
 void Audio_Init(void);
 void Play_Music(const char* directory, const char* fileName);
+void Play_Music_From_Buffer(uint8_t *buffer, size_t size);
 void Music_resume(void);
 void Music_pause(void);
 

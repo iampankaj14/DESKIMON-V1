@@ -197,6 +197,11 @@ export default function DashboardLayout({ children }) {
         setAssistantStatus('Microphone blocked! Please allow microphone access in your browser settings.');
       } else if (err.error === 'audio-capture') {
         setAssistantStatus('No microphone found. Please plug in a microphone.');
+      } else if (err.error === 'network') {
+        setAssistantStatus('Network error: Speech recognition server unreachable. Closing session in 5 seconds...');
+        setTimeout(() => {
+          closeVoiceSession();
+        }, 5000);
       } else {
         setAssistantStatus(`Error: ${err.error || 'Speech error'}`);
       }

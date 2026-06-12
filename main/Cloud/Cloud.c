@@ -1,4 +1,5 @@
 #include "Cloud.h"
+#include "MIC_Speech.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -28,6 +29,7 @@ static bool s_cloud_running = false;
 static int s_heartbeat_ref = 1;
 static char *s_ws_rx_buf = NULL;
 static int s_ws_rx_buf_len = 0;
+static uint8_t *s_mp3_play_buf = NULL;
 
 static void *cjson_spiram_malloc(size_t size)
 {
@@ -223,7 +225,7 @@ esp_err_t Cloud_ReportDiagnostics(void)
         .timeout_ms = 10000, // Increase timeout to 10 seconds to accommodate TLS handshake latency
         .crt_bundle_attach = esp_crt_bundle_attach,
         .buffer_size_tx = 512,
-        .buffer_size = 1024
+        .buffer_size = 4096
     };
     
     esp_http_client_handle_t client = esp_http_client_init(&http_cfg);
@@ -381,7 +383,7 @@ static void audio_download_task(void *pvParameters)
         .method = HTTP_METHOD_GET,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .timeout_ms = 15000,
-        .buffer_size = 2048,
+        .buffer_size = 4096,
     };
     
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -407,19 +409,11 @@ static void audio_download_task(void *pvParameters)
     int content_length = esp_http_client_fetch_headers(client);
     (void)content_length;
     
-    FILE *f = fopen("/sdcard/response.mp3", "wb");
-    if (!f) {
-        ESP_LOGE(TAG, "Failed to open file /sdcard/response.mp3 for writing");
-        esp_http_client_cleanup(client);
-        free(args);
-        vTaskDelete(NULL);
-        return;
-    }
-    
-    char *buffer = heap_caps_malloc(2048, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!buffer) {
+    // Allocate 128KB playback buffer in SPIRAM
+    size_t max_mp3_size = 128 * 1024;
+    uint8_t *download_buf = heap_caps_malloc(max_mp3_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!download_buf) {
         ESP_LOGE(TAG, "Failed to allocate download buffer in SPIRAM");
-        fclose(f);
         esp_http_client_cleanup(client);
         free(args);
         vTaskDelete(NULL);
@@ -429,22 +423,35 @@ static void audio_download_task(void *pvParameters)
     int read_bytes = 0;
     int total_bytes = 0;
     while (true) {
-        read_bytes = esp_http_client_read(client, buffer, 2048);
+        read_bytes = esp_http_client_read(client, (char *)(download_buf + total_bytes), 2048);
         if (read_bytes <= 0) {
             break;
         }
-        fwrite(buffer, 1, read_bytes, f);
         total_bytes += read_bytes;
+        if (total_bytes + 2048 > max_mp3_size) {
+            ESP_LOGW(TAG, "Audio response exceeded 128KB buffer, stopping download");
+            break;
+        }
     }
     
-    heap_caps_free(buffer);
-    fclose(f);
     esp_http_client_cleanup(client);
     
-    ESP_LOGI(TAG, "Audio download complete. Total bytes: %d. Playing response...", total_bytes);
-    
-    // Play the audio
-    Play_Music("/sdcard", "response.mp3");
+    if (total_bytes > 0) {
+        ESP_LOGI(TAG, "Audio download complete. Total bytes: %d. Playing response from RAM...", total_bytes);
+        
+        // Free previously used buffer if any
+        if (s_mp3_play_buf) {
+            heap_caps_free(s_mp3_play_buf);
+        }
+        s_mp3_play_buf = download_buf;
+
+        // Signal state machine that we're about to speak, then play audio
+        MIC_SetConvState(CONV_STATE_SPEAKING);
+        Play_Music_From_Buffer(s_mp3_play_buf, total_bytes);
+    } else {
+        ESP_LOGE(TAG, "Downloaded 0 bytes from response URL");
+        heap_caps_free(download_buf);
+    }
     
     free(args);
     s_audio_task_handle = NULL;
@@ -678,7 +685,7 @@ static void cloud_link_task(void *pvParameters)
             .event_handler = http_event_handle,
             .crt_bundle_attach = esp_crt_bundle_attach,
             .buffer_size_tx = 512,
-            .buffer_size = 1024
+            .buffer_size = 4096
         };
 
         esp_http_client_handle_t client = esp_http_client_init(&http_cfg);
@@ -780,7 +787,7 @@ esp_err_t Cloud_SetListeningState(bool is_listening)
         .timeout_ms = 8000,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .buffer_size_tx = 512,
-        .buffer_size = 512
+        .buffer_size = 4096
     };
     
     esp_http_client_handle_t client = esp_http_client_init(&http_cfg);
