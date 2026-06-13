@@ -13,6 +13,8 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "dns_server.h"
+#include "esp_heap_caps.h"
+#include "cJSON.h"
 
 static const char *TAG = "Provisioning";
 
@@ -71,6 +73,16 @@ static void stop_http_server(void);
 // PUBLIC IMPLEMENTATION
 // ============================================================
 
+static void *cjson_spiram_malloc(size_t size)
+{
+    return heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+}
+
+static void cjson_spiram_free(void *ptr)
+{
+    heap_caps_free(ptr);
+}
+
 esp_err_t Provisioning_Init(void)
 {
     if (s_initialized) {
@@ -79,6 +91,18 @@ esp_err_t Provisioning_Init(void)
     }
 
     ESP_LOGI(TAG, "Initializing provisioning system...");
+
+    // Register cJSON allocator hooks to use SPIRAM globally
+    static bool cjson_hooks_registered = false;
+    if (!cjson_hooks_registered) {
+        cJSON_Hooks hooks = {
+            .malloc_fn = cjson_spiram_malloc,
+            .free_fn = cjson_spiram_free
+        };
+        cJSON_InitHooks(&hooks);
+        cjson_hooks_registered = true;
+        ESP_LOGI(TAG, "cJSON hooks initialized to use SPIRAM globally");
+    }
 
     // Open NVS
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &s_nvs_handle);
@@ -274,25 +298,9 @@ esp_err_t Provisioning_ConnectWiFi(void)
     strncpy((char*)sta_config.sta.password, s_config.wifi_password, sizeof(sta_config.sta.password) - 1);
     sta_config.sta.threshold.authmode = strlen(s_config.wifi_password) > 0 ? WIFI_AUTH_WPA2_PSK : WIFI_AUTH_OPEN;
 
-    // Configure AP so device is always discoverable on local network
-    char hw_id[18];
-    Provisioning_GetHardwareId(hw_id, sizeof(hw_id));
-    char ap_ssid[33];
-    snprintf(ap_ssid, sizeof(ap_ssid), "%s-%c%c%c%c", AP_SSID_PREFIX,
-             hw_id[12], hw_id[13], hw_id[15], hw_id[16]);
-
-    wifi_config_t ap_config = {};
-    strncpy((char*)ap_config.ap.ssid, ap_ssid, sizeof(ap_config.ap.ssid));
-    ap_config.ap.ssid_len = strlen(ap_ssid);
-    ap_config.ap.max_connection = AP_MAX_CONNECTIONS;
-    ap_config.ap.authmode = WIFI_AUTH_OPEN;
-    ap_config.ap.channel = AP_CHANNEL;
-
-    // Use STA+AP mode so device stays discoverable while connected to internet
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+    // Use STA-only mode for normal connection to save internal RAM
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_config));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
-    ESP_LOGI(TAG, "AP+STA mode enabled. AP SSID: %s", ap_ssid);
     
     s_retry_count = 0;
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -304,19 +312,6 @@ esp_err_t Provisioning_ConnectWiFi(void)
 
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Wi-Fi connected successfully!");
-        
-        // Start HTTP server for captive portal/config
-        esp_err_t err = start_http_server();
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to start HTTP server: %s", esp_err_to_name(err));
-        }
-
-        // Start DNS server for captive portal redirection
-        err = DnsServer_Start();
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to start DNS server: %s", esp_err_to_name(err));
-        }
-
         return ESP_OK;
     } else {
         ESP_LOGE(TAG, "Wi-Fi connection failed");

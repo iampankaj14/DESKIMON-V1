@@ -99,6 +99,7 @@ uint16_t WIFI_Scan(void)
 }
 
 
+#ifdef CONFIG_BT_ENABLED
 #define GATTC_TAG "GATTC_TAG"
 #define SCAN_DURATION 5  
 #define MAX_DISCOVERED_DEVICES 100 
@@ -164,19 +165,7 @@ static void esp_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
 
                     if (extract_device_name(param->scan_rst.ble_adv, param->scan_rst.adv_data_len, device_name, sizeof(device_name))) {
                         num_devices_with_name++;
-                        // printf("Found device: %02X:%02X:%02X:%02X:%02X:%02X\n        Name: %s\n        RSSI: %d\r\n",
-                        //          param->scan_rst.bda[0], param->scan_rst.bda[1],
-                        //          param->scan_rst.bda[2], param->scan_rst.bda[3],
-                        //          param->scan_rst.bda[4], param->scan_rst.bda[5],
-                        //          device_name, param->scan_rst.rssi);
-                        // printf("\r\n");
                     } else {
-                        // printf("Found device: %02X:%02X:%02X:%02X:%02X:%02X\n        Name: Unknown\n        RSSI: %d\r\n",
-                        //          param->scan_rst.bda[0], param->scan_rst.bda[1],
-                        //          param->scan_rst.bda[2], param->scan_rst.bda[3],
-                        //          param->scan_rst.bda[4], param->scan_rst.bda[5],
-                        //          param->scan_rst.rssi);
-                        // printf("\r\n");
                     }
                 }
             }
@@ -217,14 +206,9 @@ void BLE_Init(void *arg)
         return;
     }
     BLE_Scan();
-    // while(1)
-    // {
-    //     vTaskDelay(pdMS_TO_TICKS(150));
-    // }
-    
     vTaskDelete(NULL);
-
 }
+
 uint16_t BLE_Scan(void)
 {
     esp_ble_scan_params_t scan_params = {
@@ -244,10 +228,10 @@ uint16_t BLE_Scan(void)
     vTaskDelay(SCAN_DURATION * 1000 / portTICK_PERIOD_MS);
     
     printf("Stopping BLE scan...\n");
-    // ESP_ERROR_CHECK(esp_ble_gap_stop_scanning());
     ESP_ERROR_CHECK(esp_ble_dtm_stop());
     BLE_Scan_Finish = 1;
     if(WiFi_Scan_Finish == 1)
         Scan_finish = 1;
     return BLE_NUM;
 }
+#endif
