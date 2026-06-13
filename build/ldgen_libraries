@@ -83,9 +83,10 @@
 /Users/pankaj/Desktop/DESKIMON/build/esp-idf/touch_element/libtouch_element.a
 /Users/pankaj/Desktop/DESKIMON/build/esp-idf/usb/libusb.a
 /Users/pankaj/Desktop/DESKIMON/build/esp-idf/wifi_provisioning/libwifi_provisioning.a
+/Users/pankaj/Desktop/DESKIMON/build/esp-idf/espressif__esp_websocket_client/libespressif__esp_websocket_client.a
+/Users/pankaj/Desktop/DESKIMON/build/esp-idf/lvgl__lvgl/liblvgl__lvgl.a
 /Users/pankaj/Desktop/DESKIMON/build/esp-idf/chmorgan__esp-libhelix-mp3/libchmorgan__esp-libhelix-mp3.a
 /Users/pankaj/Desktop/DESKIMON/build/esp-idf/chmorgan__esp-audio-player/libchmorgan__esp-audio-player.a
 /Users/pankaj/Desktop/DESKIMON/build/esp-idf/espressif__esp-dsp/libespressif__esp-dsp.a
 /Users/pankaj/Desktop/DESKIMON/build/esp-idf/espressif__esp-sr/libespressif__esp-sr.a
-/Users/pankaj/Desktop/DESKIMON/build/esp-idf/lvgl__lvgl/liblvgl__lvgl.a
 /Users/pankaj/Desktop/DESKIMON/build/esp-idf/main/libmain.a

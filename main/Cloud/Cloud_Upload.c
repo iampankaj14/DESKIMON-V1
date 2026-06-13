@@ -10,6 +10,9 @@
 #include "esp_timer.h"
 #include "Provisioning.h"
 #include "deskimon.h"
+#include "BAT_Driver.h"
+#include "esp_wifi.h"
+
 
 static const char *TAG = "CloudUpload";
 
@@ -446,6 +449,36 @@ esp_err_t Cloud_UploadVoiceDirect(const int16_t *pcm_data, uint32_t num_samples)
     // Set headers
     esp_http_client_set_header(client, "Content-Type", "audio/wav");
     esp_http_client_set_header(client, "X-Device-Id", config->device_id);
+
+    // Fetch battery voltage
+    float battery_volts = BAT_Get_Volts();
+    char battery_str[16];
+    snprintf(battery_str, sizeof(battery_str), "%.2f", battery_volts);
+    esp_http_client_set_header(client, "X-Device-Battery", battery_str);
+
+    // Fetch Wi-Fi status
+    wifi_ap_record_t ap_info;
+    int rssi = -100;
+    char ssid[33] = "None";
+    if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+        rssi = ap_info.rssi;
+        strncpy(ssid, (char *)ap_info.ssid, sizeof(ssid) - 1);
+        ssid[sizeof(ssid) - 1] = '\0';
+    }
+    char rssi_str[16];
+    snprintf(rssi_str, sizeof(rssi_str), "%d", rssi);
+    esp_http_client_set_header(client, "X-Device-Wifi-RSSI", rssi_str);
+    esp_http_client_set_header(client, "X-Device-Wifi-SSID", ssid);
+
+    // Fetch volume setting
+    char vol_str[16];
+    snprintf(vol_str, sizeof(vol_str), "%d", Volume);
+    esp_http_client_set_header(client, "X-Device-Volume", vol_str);
+
+    // Fetch boot count
+    char boot_str[16];
+    snprintf(boot_str, sizeof(boot_str), "%lu", (unsigned long)config->boot_count);
+    esp_http_client_set_header(client, "X-Device-Boot-Count", boot_str);
 
     // Set WAV as POST body
     esp_http_client_set_post_field(client, wav_buf, wav_size);

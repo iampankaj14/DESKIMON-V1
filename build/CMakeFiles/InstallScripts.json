@@ -116,11 +116,12 @@
 		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/ulp/cmake_install.cmake",
 		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/usb/cmake_install.cmake",
 		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/wifi_provisioning/cmake_install.cmake",
+		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/espressif__esp_websocket_client/cmake_install.cmake",
+		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/lvgl__lvgl/cmake_install.cmake",
 		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/chmorgan__esp-libhelix-mp3/cmake_install.cmake",
 		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/chmorgan__esp-audio-player/cmake_install.cmake",
 		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/espressif__esp-dsp/cmake_install.cmake",
 		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/espressif__esp-sr/cmake_install.cmake",
-		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/lvgl__lvgl/cmake_install.cmake",
 		"/Users/pankaj/Desktop/DESKIMON/build/esp-idf/main/cmake_install.cmake"
 	],
 	"Parallel" : false

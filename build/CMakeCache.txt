@@ -368,7 +368,7 @@ Mbed TLS_IS_TOP_LEVEL:STATIC=OFF
 Mbed TLS_SOURCE_DIR:STATIC=/Users/pankaj/.espressif/v5.3.2/esp-idf/components/mbedtls/mbedtls
 
 //No help, variable specified on the command line.
-PYTHON:UNINITIALIZED=/Users/pankaj/.espressif/tools/python/v5.3.2/venv/bin/python
+PYTHON:UNINITIALIZED=/Users/pankaj/.espressif/python_env/idf5.3_py3.14_env/bin/python
 
 //No help, variable specified on the command line.
 PYTHON_DEPS_CHECKED:UNINITIALIZED=1
@@ -558,7 +558,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=121
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=122
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP
@@ -608,7 +608,7 @@ C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS:INTERNAL=1
 //Details about finding Git
 FIND_PACKAGE_MESSAGE_DETAILS_Git:INTERNAL=[/usr/bin/git][v2.50.1 (Apple Git-155)()]
 //Details about finding Python3
-FIND_PACKAGE_MESSAGE_DETAILS_Python3:INTERNAL=[/Users/pankaj/.espressif/tools/python/v5.3.2/venv/bin/python][found components: Interpreter ][v3.14.4()]
+FIND_PACKAGE_MESSAGE_DETAILS_Python3:INTERNAL=[/Users/pankaj/.espressif/python_env/idf5.3_py3.14_env/bin/python][found components: Interpreter ][v3.14.4()]
 //Details about finding Threads
 FIND_PACKAGE_MESSAGE_DETAILS_Threads:INTERNAL=[TRUE][v()]
 //ADVANCED property for variable: GIT_EXECUTABLE
@@ -619,10 +619,10 @@ _GNUInstallDirs_LAST_CMAKE_INSTALL_PREFIX:INTERNAL=/usr/local
 _Python3_Compiler_REASON_FAILURE:INTERNAL=
 //Development reason failure
 _Python3_Development_REASON_FAILURE:INTERNAL=
-_Python3_EXECUTABLE:INTERNAL=/Users/pankaj/.espressif/tools/python/v5.3.2/venv/bin/python
+_Python3_EXECUTABLE:INTERNAL=/Users/pankaj/.espressif/python_env/idf5.3_py3.14_env/bin/python
 //Python3 Properties
-_Python3_INTERPRETER_PROPERTIES:INTERNAL=Python;3;14;4;32;64;;;abi3;/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14;/Users/pankaj/.espressif/tools/python/v5.3.2/venv/lib/python3.14;/Users/pankaj/.espressif/tools/python/v5.3.2/venv/lib/python3.14/site-packages;/Users/pankaj/.espressif/tools/python/v5.3.2/venv/lib/python3.14/site-packages
-_Python3_INTERPRETER_SIGNATURE:INTERNAL=01f05d09be975d31ae99db5f6d7a1d02
+_Python3_INTERPRETER_PROPERTIES:INTERNAL=Python;3;14;4;32;64;;;abi3;/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14;/Users/pankaj/.espressif/python_env/idf5.3_py3.14_env/lib/python3.14;/Users/pankaj/.espressif/python_env/idf5.3_py3.14_env/lib/python3.14/site-packages;/Users/pankaj/.espressif/python_env/idf5.3_py3.14_env/lib/python3.14/site-packages
+_Python3_INTERPRETER_SIGNATURE:INTERNAL=ee1784cf0ab169f9afba4224e8f29af2
 //NumPy reason failure
 _Python3_NumPy_REASON_FAILURE:INTERNAL=
 

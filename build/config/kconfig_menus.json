@@ -6352,6 +6352,16 @@
                 "range": null,
                 "title": "This enables BLE 4.2 features.",
                 "type": "bool"
+            },
+            {
+                "children": [],
+                "depends_on": null,
+                "help": "URL of the server running server_daemon.js. If empty, the\nESP32 will use the legacy Supabase storage path.\nSet this to your server's LAN IP for development, or\na public URL for production deployment.",
+                "id": "DESKIMON_VOICE_API_URL",
+                "name": "DESKIMON_VOICE_API_URL",
+                "range": null,
+                "title": "Direct Voice API server URL (e.g. http://192.168.1.100:3001)",
+                "type": "string"
             }
         ],
         "depends_on": null,
@@ -23390,7 +23400,10 @@
                                         "help": "If malloc() is capable of also allocating SPI-connected ram, its allocation strategy will prefer to\nallocate chunks less than this size in internal memory, while allocations larger than this will be\ndone from external RAM. If allocation from the preferred region fails, an attempt is made to allocate\nfrom the non-preferred region instead, so malloc() will not suddenly fail when either internal or\nexternal memory is full.",
                                         "id": "SPIRAM_MALLOC_ALWAYSINTERNAL",
                                         "name": "SPIRAM_MALLOC_ALWAYSINTERNAL",
-                                        "range": null,
+                                        "range": [
+                                            0,
+                                            131072
+                                        ],
                                         "title": "Maximum malloc() size, in bytes, to always put in internal memory",
                                         "type": "int"
                                     },
@@ -23410,7 +23423,10 @@
                                         "help": "Because the external/internal RAM allocation strategy is not always perfect, it sometimes may happen\nthat the internal memory is entirely filled up. This causes allocations that are specifically done in\ninternal memory, for example the stack for new tasks or memory to service DMA or have memory that's\nalso available when SPI cache is down, to fail. This option reserves a pool specifically for requests\nlike that; the memory in this pool is not given out when a normal malloc() is called.\n\nSet this to 0 to disable this feature.\n\nNote that because FreeRTOS stacks are forced to internal memory, they will also use this memory pool;\nbe sure to keep this in mind when adjusting this value.\n\nNote also that the DMA reserved pool may not be one single contiguous memory region, depending on the\nconfigured size and the static memory usage of the app.",
                                         "id": "SPIRAM_MALLOC_RESERVE_INTERNAL",
                                         "name": "SPIRAM_MALLOC_RESERVE_INTERNAL",
-                                        "range": null,
+                                        "range": [
+                                            0,
+                                            262144
+                                        ],
                                         "title": "Reserve this amount of bytes for data that specifically needs to be in DMA or internal memory",
                                         "type": "int"
                                     },
@@ -25119,7 +25135,10 @@
                         "help": "Set the number of WiFi static TX buffers. Each buffer takes approximately 1.6KB of RAM.\nThe static RX buffers are allocated when esp_wifi_init() is called, they are not released\nuntil esp_wifi_deinit() is called.\n\nFor each transmitted data frame from the higher layer TCP/IP stack, the WiFi driver makes a\ncopy of it in a TX buffer.  For some applications especially UDP applications, the upper\nlayer can deliver frames faster than WiFi layer can transmit. In these cases, we may run out\nof TX buffers.",
                         "id": "ESP_WIFI_STATIC_TX_BUFFER_NUM",
                         "name": "ESP_WIFI_STATIC_TX_BUFFER_NUM",
-                        "range": null,
+                        "range": [
+                            1,
+                            64
+                        ],
                         "title": "Max number of WiFi static TX buffers",
                         "type": "int"
                     },
@@ -25142,10 +25161,7 @@
                         "help": "Set the number of WiFi dynamic TX buffers. The size of each dynamic TX buffer is not fixed,\nit depends on the size of each transmitted data frame.\n\nFor each transmitted frame from the higher layer TCP/IP stack, the WiFi driver makes a copy\nof it in a TX buffer. For some applications, especially UDP applications, the upper layer\ncan deliver frames faster than WiFi layer can transmit. In these cases, we may run out of TX\nbuffers.",
                         "id": "ESP_WIFI_DYNAMIC_TX_BUFFER_NUM",
                         "name": "ESP_WIFI_DYNAMIC_TX_BUFFER_NUM",
-                        "range": [
-                            1,
-                            128
-                        ],
+                        "range": null,
                         "title": "Max number of WiFi dynamic TX buffers",
                         "type": "int"
                     },
@@ -31015,10 +31031,7 @@
                                         "help": "This config helps to set the interrupt priority level for the AES peripheral.\nValue 0 (default) means that there is no preference regarding the interrupt\npriority level and any level from 1 to 3 can be selected (based on the availability).\nNote: Higher value indicates high interrupt priority.",
                                         "id": "MBEDTLS_AES_INTERRUPT_LEVEL",
                                         "name": "MBEDTLS_AES_INTERRUPT_LEVEL",
-                                        "range": [
-                                            0,
-                                            3
-                                        ],
+                                        "range": null,
                                         "title": "AES hardware interrupt level",
                                         "type": "int"
                                     }
@@ -38372,6 +38385,45 @@
                 "depends_on": null,
                 "id": "component-config-lvgl-configuration",
                 "title": "LVGL configuration",
+                "type": "menu"
+            },
+            {
+                "children": [
+                    {
+                        "children": [],
+                        "depends_on": null,
+                        "help": "Enable this option will reallocated buffer when send or receive data and free them when end of use.\nThis can save about 2 KB memory when no websocket data send and receive.",
+                        "id": "ESP_WS_CLIENT_ENABLE_DYNAMIC_BUFFER",
+                        "name": "ESP_WS_CLIENT_ENABLE_DYNAMIC_BUFFER",
+                        "range": null,
+                        "title": "Enable websocket client dynamic buffer for send and receive data",
+                        "type": "bool"
+                    },
+                    {
+                        "children": [
+                            {
+                                "children": [],
+                                "depends_on": "ESP_WS_CLIENT_SEPARATE_TX_LOCK",
+                                "help": "Timeout for acquiring the TX lock when using separate TX lock.",
+                                "id": "ESP_WS_CLIENT_TX_LOCK_TIMEOUT_MS",
+                                "name": "ESP_WS_CLIENT_TX_LOCK_TIMEOUT_MS",
+                                "range": null,
+                                "title": "TX lock timeout in milliseconds",
+                                "type": "int"
+                            }
+                        ],
+                        "depends_on": null,
+                        "help": "Enable this option will use separate lock for send and receive data.\nThis can avoid the lock contention when send and receive data at the same time.",
+                        "id": "ESP_WS_CLIENT_SEPARATE_TX_LOCK",
+                        "name": "ESP_WS_CLIENT_SEPARATE_TX_LOCK",
+                        "range": null,
+                        "title": "Enable separate tx lock for send and receive data",
+                        "type": "bool"
+                    }
+                ],
+                "depends_on": null,
+                "id": "component-config-esp-websocket-client",
+                "title": "ESP WebSocket client",
                 "type": "menu"
             }
         ],

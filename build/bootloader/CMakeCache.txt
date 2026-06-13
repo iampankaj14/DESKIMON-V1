@@ -263,7 +263,7 @@ IGNORE_EXTRA_COMPONENT:UNINITIALIZED=
 PROJECT_SOURCE_DIR:UNINITIALIZED=/Users/pankaj/Desktop/DESKIMON
 
 //No help, variable specified on the command line.
-PYTHON:UNINITIALIZED=/Users/pankaj/.espressif/tools/python/v5.3.2/venv/bin/python
+PYTHON:UNINITIALIZED=/Users/pankaj/.espressif/python_env/idf5.3_py3.14_env/bin/python
 
 //No help, variable specified on the command line.
 PYTHON_DEPS_CHECKED:UNINITIALIZED=1

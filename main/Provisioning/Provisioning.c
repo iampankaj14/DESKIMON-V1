@@ -95,7 +95,7 @@ esp_err_t Provisioning_Init(void)
         s_config.prov_state = PROV_STATE_UNPROVISIONED;
         s_config.eye_color = 0x00FFFF;
         s_config.brightness = 80;
-        s_config.volume = 70;
+        s_config.volume = 100;
         snprintf(s_config.device_name, sizeof(s_config.device_name), "My Deskimon");
     }
 

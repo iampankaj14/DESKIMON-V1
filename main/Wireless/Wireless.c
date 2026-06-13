@@ -1,6 +1,7 @@
 #include "Wireless.h"
 #include "Provisioning.h"
 #include "Cloud.h"
+#include "PCM5101.h"
 
 uint16_t BLE_NUM = 0;
 uint16_t WIFI_NUM = 0;
@@ -33,6 +34,9 @@ void Wireless_Init(void)
 
     // Initialize Provisioning Module
     ESP_ERROR_CHECK(Provisioning_Init());
+
+    // Apply the saved volume factor loaded from NVS to the audio driver
+    Volume_adjustment(Provisioning_GetConfig()->volume);
 
     // Check provisioning state and act
     prov_state_t state = Provisioning_GetState();

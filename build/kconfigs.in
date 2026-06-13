@@ -74,3 +74,4 @@ source "/Users/pankaj/.espressif/v5.3.2/esp-idf/components/wifi_provisioning/Kco
 source "/Users/pankaj/Desktop/DESKIMON/components/chmorgan__esp-audio-player/Kconfig"
 source "/Users/pankaj/Desktop/DESKIMON/components/espressif__esp-dsp/Kconfig"
 source "/Users/pankaj/Desktop/DESKIMON/components/lvgl__lvgl/Kconfig"
+source "/Users/pankaj/Desktop/DESKIMON/managed_components/espressif__esp_websocket_client/Kconfig"
