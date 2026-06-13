@@ -2,10 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { createClient } = require('@supabase/supabase-js');
-const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
 const { matchIntent } = require('./intent_matcher');
 const GroqSTTProvider = require('./providers/groq_provider');
 const GeminiSTTProvider = require('./providers/gemini_provider');
+const TTSProvider = require('./tts_provider');
 const memorySystem = require('./memory_system');
 const milestoneSystem = require('./milestone_system');
 
@@ -34,8 +34,18 @@ const GROQ_API_KEY = env.NEXT_PUBLIC_GROQ_API_KEY || process.env.NEXT_PUBLIC_GRO
 const STT_PROVIDER = env.STT_PROVIDER || process.env.STT_PROVIDER || 'groq';
 const VOICE_API_PORT = parseInt(env.VOICE_API_PORT || process.env.VOICE_API_PORT || '3001', 10);
 
+const TTS_PROVIDER = env.TTS_PROVIDER || process.env.TTS_PROVIDER || 'cartesia';
+const CARTESIA_API_KEY = env.CARTESIA_API_KEY || process.env.CARTESIA_API_KEY;
+const CARTESIA_VOICE_NAME = env.CARTESIA_VOICE_NAME || process.env.CARTESIA_VOICE_NAME || 'Nolan';
+
 const groqSTT = new GroqSTTProvider(GROQ_API_KEY);
 const geminiSTT = new GeminiSTTProvider(GEMINI_API_KEY);
+const ttsProvider = new TTSProvider({
+  provider: TTS_PROVIDER,
+  cartesiaApiKey: CARTESIA_API_KEY,
+  cartesiaVoiceName: CARTESIA_VOICE_NAME
+});
+
 
 /**
  * Transcribes audio with configured provider and falls back to Gemini STT on failure
@@ -364,26 +374,19 @@ async function processVoiceAudio(deviceId, audioBuffer, deviceState = {}) {
   // Save turn to conversation history
   conversations.addTurn(deviceId, transcribedText || '[Audio query]', aiResponse);
 
-  // C. Synthesize Speech using Microsoft Edge TTS
-  console.log("[Voice] Synthesizing response via Edge TTS...");
+  // C. Synthesize Speech using modular TTS Provider (Cartesia with Edge fallback)
+  console.log(`[Voice] Synthesizing response via ${TTS_PROVIDER}...`);
   const ttsStart = Date.now();
-
-  const tts = new MsEdgeTTS();
-  await tts.setMetadata("en-US-AvaNeural", OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-
-  const { audioStream } = tts.toStream(aiResponse, { rate: "+0%" });
-
-  // Collect stream into buffer (no temp file needed)
-  const chunks = [];
-  await new Promise((resolve, reject) => {
-    audioStream.on('data', (chunk) => chunks.push(chunk));
-    audioStream.on('end', resolve);
-    audioStream.on('error', reject);
-  });
-
-  const mp3Buffer = Buffer.concat(chunks);
+  let mp3Buffer;
+  try {
+    mp3Buffer = await ttsProvider.synthesize(aiResponse);
+  } catch (ttsErr) {
+    console.error(`[Voice] Critical: Unified TTS provider failed completely: ${ttsErr.message}`);
+    mp3Buffer = Buffer.alloc(0); // silent fallback/empty buffer to protect ESP32
+  }
   const totalMs = Date.now() - startTime;
-  console.log(`[Voice] TTS done in ${Date.now() - ttsStart}ms. MP3 size: ${mp3Buffer.length} bytes. Total processing: ${totalMs}ms`);
+  console.log(`[Voice] TTS process completed in ${Date.now() - ttsStart}ms. MP3 size: ${mp3Buffer.length} bytes. Total processing: ${totalMs}ms`);
+
 
   return { mp3Buffer, aiResponse, isFollowUp, turnNumber, totalMs, milestoneTriggered: milestoneResult ? milestoneResult.type : null };
 }
