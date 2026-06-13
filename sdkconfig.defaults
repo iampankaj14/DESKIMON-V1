@@ -518,3 +518,5 @@ CONFIG_EN_SPEECH_COMMAND_ID198=""
 CONFIG_EN_SPEECH_COMMAND_ID199=""
 # end of Add English speech commands
 # end of ESP Speech Recognition
+
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384

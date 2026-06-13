@@ -1,6 +1,8 @@
 #include "deskimon.h"
 #include "../QMI8658/QMI8658.h"
 #include <stdlib.h>
+#include "esp_timer.h"
+#include "../MIC_Driver/MIC_Speech.h"
 
 typedef enum {
     EYE_STATE_BOOT = 0,
@@ -665,6 +667,8 @@ static void screen_event_cb(lv_event_t * e) {
     }
 
     if (code == LV_EVENT_PRESSED) {
+        ESP_LOGI("LATENCY_AUDIT", "[LATENCY] Button Press: %lld ms", esp_timer_get_time() / 1000);
+        MIC_StartRecordingManual();
         idle_time = 0;
         uint32_t now = lv_tick_get();
         if (now - last_tap_time < 600) tap_count++;

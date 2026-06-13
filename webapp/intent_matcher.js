@@ -15,6 +15,9 @@ const levCache = new Map();
 const cleanTextCache = new Map();
 const strSimCache = new Map();
 
+// Pre-computed exact phrase lookup map for fast-path latency optimization (H3)
+const exactMatchMap = new Map();
+
 /**
  * Standard Levenshtein Distance implementation with Map caching
  */
@@ -106,6 +109,26 @@ function cleanText(text) {
   cleanTextCache.set(text, cleaned);
   return cleaned;
 }
+
+/**
+ * Builds the exact match phrase map from intents data
+ */
+function buildExactMatchMap() {
+  if (!intentsData || !intentsData.intents) return;
+  for (const intent of intentsData.intents) {
+    const name = intent.intent_name || intent.name;
+    const phrases = intent.example_phrases || intent.phrases || [];
+    for (const phrase of phrases) {
+      const cleaned = cleanText(phrase);
+      if (cleaned) {
+        if (!exactMatchMap.has(cleaned)) {
+          exactMatchMap.set(cleaned, intent);
+        }
+      }
+    }
+  }
+}
+buildExactMatchMap();
 
 /**
  * Get string similarity score between 0.0 and 1.0 based on Levenshtein and Map caching
@@ -250,6 +273,21 @@ function matchIntent(rawInput, deviceState = {}) {
   const cleanInput = cleanText(rawInput);
   if (!cleanInput) {
     return { matched: false, intent: null, score: 0.0, responseText: "" };
+  }
+
+  // Fast-path lookup for exact training phrase match (latency optimization H3)
+  if (exactMatchMap.has(cleanInput)) {
+    const intent = exactMatchMap.get(cleanInput);
+    const name = intent.intent_name || intent.name;
+    const randomIndex = Math.floor(Math.random() * intent.responses.length);
+    const template = intent.responses[randomIndex];
+    return {
+      matched: true,
+      intent: name,
+      score: 1.0,
+      responseText: formatResponse(template, deviceState),
+      personality: intent.personality || intent.category || null
+    };
   }
 
   let bestMatch = {

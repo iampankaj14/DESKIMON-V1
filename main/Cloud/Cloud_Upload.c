@@ -340,7 +340,13 @@ static esp_err_t direct_voice_http_event(esp_http_client_event_t *evt)
     if (!ctx) return ESP_OK;
 
     switch (evt->event_id) {
+        case HTTP_EVENT_HEADER_SENT:
+            ESP_LOGI("LATENCY_AUDIT", "[LATENCY] HTTP Upload End: %lld ms", esp_timer_get_time() / 1000);
+            break;
         case HTTP_EVENT_ON_DATA:
+            if (ctx->response_len == 0) {
+                ESP_LOGI("LATENCY_AUDIT", "[LATENCY] First Byte Received: %lld ms", esp_timer_get_time() / 1000);
+            }
             if (ctx->response_buf && ctx->response_len + evt->data_len <= ctx->response_max) {
                 memcpy(ctx->response_buf + ctx->response_len, evt->data, evt->data_len);
                 ctx->response_len += evt->data_len;
@@ -394,6 +400,7 @@ esp_err_t Cloud_UploadVoiceDirect(const int16_t *pcm_data, uint32_t num_samples)
     header->data_size = data_size;
     memcpy(wav_buf + sizeof(wav_header_t), pcm_data, data_size);
 
+    ESP_LOGI("LATENCY_AUDIT", "[LATENCY] WAV Creation: %lld ms", esp_timer_get_time() / 1000);
     ESP_LOGI(TAG, "Built WAV buffer (%d bytes). POSTing directly to server...", (int)wav_size);
 
     // 2. Allocate response buffer in SPIRAM (128KB for MP3 response)
@@ -486,11 +493,13 @@ esp_err_t Cloud_UploadVoiceDirect(const int16_t *pcm_data, uint32_t num_samples)
     // 4. Perform the request — this blocks until response is received
     ESP_LOGI(TAG, "Sending WAV to %s ...", url);
     int64_t start_us = esp_timer_get_time();
+    ESP_LOGI("LATENCY_AUDIT", "[LATENCY] HTTP Upload Start: %lld ms", start_us / 1000);
 
     esp_err_t err = esp_http_client_perform(client);
     int status_code = 0;
     
     if (err == ESP_OK) {
+        ESP_LOGI("LATENCY_AUDIT", "[LATENCY] Full MP3 Received: %lld ms", esp_timer_get_time() / 1000);
         status_code = esp_http_client_get_status_code(client);
         int64_t elapsed_ms = (esp_timer_get_time() - start_us) / 1000;
         ESP_LOGI(TAG, "Direct voice response: HTTP %d, %d bytes MP3, %lld ms round-trip",

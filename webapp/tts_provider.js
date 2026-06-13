@@ -13,6 +13,22 @@ class TTSProvider {
     this.edgeTTS = new MsEdgeTTS();
   }
 
+  async warmup() {
+    if (this.primaryProviderName === 'cartesia') {
+      try {
+        console.log(`[TTS] Initiating boot-time warmup task...`);
+        const start = Date.now();
+        // 1. Resolve Voice ID
+        await this.cartesiaProvider._resolveVoiceId();
+        // 2. Synthesize dummy phrase and discard output to establish TCP/TLS connection
+        await this.cartesiaProvider.synthesize("Deskimon warmup");
+        console.log(`[TTS] Boot-time warmup succeeded in ${Date.now() - start}ms.`);
+      } catch (err) {
+        console.warn(`[TTS] Boot-time warmup failed: ${err.message}`);
+      }
+    }
+  }
+
   async synthesize(text) {
     let chosenProvider = this.primaryProviderName;
     let chosenVoice = chosenProvider === 'cartesia' ? this.cartesiaVoiceName : this.edgeVoiceName;

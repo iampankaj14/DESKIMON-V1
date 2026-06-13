@@ -60,4 +60,6 @@ void MIC_Speech_init(void);
 // Conversation state machine API (called from Cloud module)
 conv_state_t MIC_GetConvState(void);
 void MIC_SetConvState(conv_state_t new_state);
+void MIC_StartRecordingManual(void);
+
 

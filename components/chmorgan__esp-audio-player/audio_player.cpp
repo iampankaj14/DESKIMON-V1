@@ -28,6 +28,7 @@
 
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -397,6 +398,7 @@ static esp_err_t aplay_file(audio_instance_t *i, FILE *fp)
             LOGI_2("no data");
         } else { // DECODE_STATUS_DONE || DECODE_STATUS_ERROR
             LOGI_1("breaking out of playback");
+            ESP_LOGI("LATENCY_AUDIT", "[LATENCY] Decode End: %lld ms", esp_timer_get_time() / 1000);
             break;
         }
     } while (true);

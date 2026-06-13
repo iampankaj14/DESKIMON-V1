@@ -1,4 +1,5 @@
 #include "PCM5101.h"
+#include "esp_timer.h"
 
 static const char *TAG = "AUDIO PCM5101"; 
 
@@ -72,6 +73,7 @@ static audio_player_callback_event_t event;
 
 static void audio_player_callback(audio_player_cb_ctx_t *ctx) {
     if (ctx->audio_event == AUDIO_PLAYER_CALLBACK_EVENT_IDLE) {
+        ESP_LOGI("LATENCY_AUDIT", "[LATENCY] Playback End: %lld ms", esp_timer_get_time() / 1000);
         ESP_LOGI(TAG, "Playback finished");
         Music_Next_Flag = 1;
     }
@@ -163,6 +165,7 @@ void Play_Music_From_Buffer(uint8_t *buffer, size_t size)
     }
 
     expected_event = AUDIO_PLAYER_CALLBACK_EVENT_PLAYING;
+    ESP_LOGI("LATENCY_AUDIT", "[LATENCY] Decode Start: %lld ms", esp_timer_get_time() / 1000);
     esp_err_t ret = audio_player_play(Music_File);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to play audio from buffer: %s", esp_err_to_name(ret));
@@ -176,6 +179,7 @@ void Play_Music_From_Buffer(uint8_t *buffer, size_t size)
         Music_File = NULL;
         return;
     }
+    ESP_LOGI("LATENCY_AUDIT", "[LATENCY] Playback Start: %lld ms", esp_timer_get_time() / 1000);
     if (audio_player_get_state() != AUDIO_PLAYER_STATE_PLAYING) {
         ESP_LOGE(TAG, "Expected state to be PLAYING after buffer play");
         fclose(Music_File);

@@ -606,6 +606,11 @@ async function run() {
   // Start the direct HTTP Voice API server
   startVoiceApiServer();
 
+  // Trigger boot-time warmup task to eliminate cold starts (H1 & H2)
+  ttsProvider.warmup().catch(err => {
+    console.error("[Warmup] Unexpected error during warmup:", err);
+  });
+
   console.log("\n╔══════════════════════════════════════════════════════════╗");
   console.log("║   DESKIMON AI Daemon v3.0 — Direct API + Fallback     ║");
   console.log("╚══════════════════════════════════════════════════════════╝\n");

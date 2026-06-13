@@ -21,7 +21,6 @@ if(CONFIG_AUDIO_PLAYER_ENABLE_WAV)
 endif()
 
 idf_component_register(SRCS "${srcs}"
-                       REQUIRES "${requires}"
+                       REQUIRES "${requires}" driver esp_timer
                        INCLUDE_DIRS "${includes}"
-                       REQUIRES driver
 )

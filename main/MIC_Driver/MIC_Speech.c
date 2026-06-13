@@ -3,6 +3,7 @@
 #include "deskimon.h"
 #include "PCM5101.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 
 #include "driver/gpio.h"
 #include "driver/i2s_std.h"
@@ -27,8 +28,8 @@
 #define SPEECH_ENERGY_THRESHOLD  250     // Energy threshold for speech detection
 #define SPEECH_ONSET_SAMPLES     (16000 * 0.15f)  // 150ms of speech to confirm onset
 #define SETTLING_DELAY_MS        300     // Post-playback settling time before listening
-#define MIN_RECORDING_SECONDS    0.8f    // Minimum recording before silence check
-#define SILENCE_DURATION_SECONDS 0.6f    // Consecutive silence to stop recording
+#define MIN_RECORDING_SECONDS    0.4f    // Minimum recording before silence check
+#define SILENCE_DURATION_SECONDS 0.4f    // Consecutive silence to stop recording
 
 static const char *TAG = "App/Speech";
 
@@ -160,6 +161,7 @@ static void start_recording(void)
     s_record_index = 0;
     s_recording_active = true;
     s_consecutive_speech_samples = 0;
+    ESP_LOGI("LATENCY_AUDIT", "[LATENCY] Recording Start: %lld ms", esp_timer_get_time() / 1000);
     ESP_LOGI(TAG, "Voice recording started (max %d seconds)...", (int)(s_record_max_samples / 16000));
 }
 
@@ -225,6 +227,7 @@ static void voice_upload_task(void *pvParameters)
 static void finish_recording_and_upload(uint32_t num_samples)
 {
     s_recording_active = false;
+    ESP_LOGI("LATENCY_AUDIT", "[LATENCY] Recording End: %lld ms", esp_timer_get_time() / 1000);
     s_conv_state = CONV_STATE_PROCESSING;
     s_processing_start_tick = xTaskGetTickCount();
     
@@ -679,4 +682,24 @@ void MIC_Speech_init()
     xTaskCreatePinnedToCore((TaskFunction_t)detect_hander, "App/SR/Detect", 5 * 1024, &MIC_Speech, 5, NULL, 1);
 
     ESP_LOGI(TAG, "MIC Speech initialized with continuous conversation support.");
+}
+
+void MIC_StartRecordingManual(void)
+{
+    if (s_conv_state == CONV_STATE_IDLE || s_conv_state == CONV_STATE_FOLLOWUP_LISTENING) {
+        ESP_LOGI(TAG, "Manual trigger: transitioning to LISTENING");
+        cancel_followup_timer();
+        if (MIC_Speech.afe_handle && MIC_Speech.afe_data) {
+            MIC_Speech.afe_handle->disable_wakenet(MIC_Speech.afe_data);
+        }
+        MIC_Speech.detected = true;
+        LCD_Backlight = 35;
+        Cloud_SetListeningState(true);
+        Deskimon_SetEmotion("listening");
+        
+        s_conv_state = CONV_STATE_LISTENING;
+        start_recording();
+    } else {
+        ESP_LOGI(TAG, "Manual trigger ignored: state is %d", (int)s_conv_state);
+    }
 }
