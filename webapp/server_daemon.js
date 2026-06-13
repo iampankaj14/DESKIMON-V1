@@ -7,6 +7,7 @@ const { matchIntent } = require('./intent_matcher');
 const GroqSTTProvider = require('./providers/groq_provider');
 const GeminiSTTProvider = require('./providers/gemini_provider');
 const memorySystem = require('./memory_system');
+const milestoneSystem = require('./milestone_system');
 
 
 // 1. Load Environment Variables manually from .env.local
@@ -217,18 +218,26 @@ async function processVoiceAudio(deviceId, audioBuffer, deviceState = {}) {
     console.warn(`[Voice] Error transcribing audio:`, err.message);
   }
 
-  // Auto-detect and store memory + add XP for interaction
+  // Auto-detect milestone / store memory + add XP for interaction
+  let milestoneResult = null;
   if (transcribedText) {
     try {
-      memorySystem.detectAndStoreMemory(deviceId, transcribedText);
+      milestoneResult = milestoneSystem.detectAndCelebrateMilestone(deviceId, transcribedText);
+      if (!milestoneResult) {
+        memorySystem.detectAndStoreMemory(deviceId, transcribedText);
+      }
       memorySystem.addXP(deviceId, 1); // 1 XP per query
-    } catch (memErr) {
-      console.error("[MemorySystem] Error in detectAndStoreMemory/addXP:", memErr.message);
+    } catch (err) {
+      console.error("[MemorySystem/MilestoneSystem] Error:", err.message);
     }
   }
 
-  // 2. Intent Matching
-  if (transcribedText) {
+  // 2. Intent Matching / Milestone Celebration
+  if (milestoneResult) {
+    console.log(`\n[MILESTONE CELEBRATION]\nType: ${milestoneResult.type}\nResponse: "${milestoneResult.response}"\n`);
+    aiResponse = milestoneResult.response;
+    isLocalMatch = true;
+  } else if (transcribedText) {
     const intentResult = matchIntent(transcribedText, deviceState);
     bestIntent = intentResult.intent || "NONE";
     bestScore = intentResult.score || 0.0;
@@ -376,7 +385,7 @@ async function processVoiceAudio(deviceId, audioBuffer, deviceState = {}) {
   const totalMs = Date.now() - startTime;
   console.log(`[Voice] TTS done in ${Date.now() - ttsStart}ms. MP3 size: ${mp3Buffer.length} bytes. Total processing: ${totalMs}ms`);
 
-  return { mp3Buffer, aiResponse, isFollowUp, turnNumber, totalMs };
+  return { mp3Buffer, aiResponse, isFollowUp, turnNumber, totalMs, milestoneTriggered: milestoneResult ? milestoneResult.type : null };
 }
 
 // ============================================================
@@ -428,12 +437,17 @@ function startVoiceApiServer() {
           const result = await processVoiceAudio(deviceId, audioBuffer, deviceState);
 
           // Return MP3 directly in response — no Supabase round-trip!
-          res.writeHead(200, {
+          const headers = {
             'Content-Type': 'audio/mpeg',
             'Content-Length': result.mp3Buffer.length,
             'X-AI-Response': Buffer.from(result.aiResponse).toString('base64'),
             'X-Processing-Ms': result.totalMs.toString()
-          });
+          };
+          if (result.milestoneTriggered) {
+            headers['X-Deskimon-Action'] = 'celebrate';
+            headers['X-Deskimon-Milestone'] = result.milestoneTriggered;
+          }
+          res.writeHead(200, headers);
           res.end(result.mp3Buffer);
 
           console.log(`[HTTP API] Sent ${result.mp3Buffer.length} byte MP3 response. Total: ${result.totalMs}ms`);
