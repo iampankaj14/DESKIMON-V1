@@ -14,8 +14,8 @@ static esp_err_t bsp_i2s_write(void *audio_buffer, size_t len, size_t *bytes_wri
     int16_t *samples = (int16_t *)audio_buffer;
     size_t sample_count = len / sizeof(int16_t);
     
-    // Convert 0-100 Volume to 0.0 - 1.0 scaling factor (max 100% volume to prevent digital clipping)
-    float volume_factor = (Volume / 100.0f) * 1.0f;
+    // Convert 0-100 Volume to 0.0 - 4.0 scaling factor (max 400% volume)
+    float volume_factor = (Volume / 100.0f) * 4.0f;
 
     for (size_t i = 0; i < sample_count; i++) {
         int32_t sample_val = (int32_t)(samples[i] * volume_factor);
@@ -235,5 +235,5 @@ void Volume_adjustment(uint8_t Vol) {
     } else {
         Volume = Vol;
     }
-    ESP_LOGI(TAG, "Volume set to %d (scaling factor: %.2f)", Volume, (Volume / 100.0f) * 1.0f);
+    ESP_LOGI(TAG, "Volume set to %d (scaling factor: %.2f)", Volume, (Volume / 100.0f) * 4.0f);
 }

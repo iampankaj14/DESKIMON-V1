@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "ESP32-S3-Touch-LCD-1.46-Test",
-    "project_version":    "AI-V1-8-gb158f58-dirty",
+    "project_version":    "AI-V1-9-g22e8e9c-dirty",
     "project_path":       "/Users/pankaj/Desktop/DESKIMON",
     "idf_path":           "/Users/pankaj/.espressif/v5.3.2/esp-idf",
     "build_dir":          "/Users/pankaj/Desktop/DESKIMON/build",
