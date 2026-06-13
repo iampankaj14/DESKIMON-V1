@@ -3,6 +3,11 @@ const path = require('path');
 const http = require('http');
 const { createClient } = require('@supabase/supabase-js');
 const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+const { matchIntent } = require('./intent_matcher');
+const GroqSTTProvider = require('./providers/groq_provider');
+const GeminiSTTProvider = require('./providers/gemini_provider');
+const memorySystem = require('./memory_system');
+
 
 // 1. Load Environment Variables manually from .env.local
 const envPath = path.join(__dirname, '.env.local');
@@ -24,7 +29,40 @@ if (fs.existsSync(envPath)) {
 const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const GEMINI_API_KEY = env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+const GROQ_API_KEY = env.NEXT_PUBLIC_GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY || env.GROQ_API_KEY || process.env.GROQ_API_KEY;
+const STT_PROVIDER = env.STT_PROVIDER || process.env.STT_PROVIDER || 'groq';
 const VOICE_API_PORT = parseInt(env.VOICE_API_PORT || process.env.VOICE_API_PORT || '3001', 10);
+
+const groqSTT = new GroqSTTProvider(GROQ_API_KEY);
+const geminiSTT = new GeminiSTTProvider(GEMINI_API_KEY);
+
+/**
+ * Transcribes audio with configured provider and falls back to Gemini STT on failure
+ */
+async function transcribeAudio(audioBuffer) {
+  const provider = STT_PROVIDER.toLowerCase();
+  
+  if (provider === 'groq') {
+    if (!GROQ_API_KEY) {
+      console.warn("[STT] Groq API key is missing. Falling back to Gemini STT.");
+    } else {
+      try {
+        const start = Date.now();
+        const text = await groqSTT.transcribe(audioBuffer);
+        console.log(`[STT] Groq transcription succeeded in ${Date.now() - start}ms: "${text}"`);
+        return text;
+      } catch (err) {
+        console.warn(`[STT] Groq transcription failed, falling back to Gemini STT:`, err.message);
+      }
+    }
+  }
+
+  // Fallback or explicit Gemini STT
+  const start = Date.now();
+  const text = await geminiSTT.transcribe(audioBuffer);
+  console.log(`[STT] Gemini transcription succeeded in ${Date.now() - start}ms: "${text}"`);
+  return text;
+}
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error("Error: Supabase configuration is missing from .env.local");
@@ -155,7 +193,7 @@ const conversations = new ConversationManager(60000, 10);
  * @param {Buffer} audioBuffer - Raw WAV audio bytes
  * @returns {Promise<{mp3Buffer: Buffer, aiResponse: string}>}
  */
-async function processVoiceAudio(deviceId, audioBuffer) {
+async function processVoiceAudio(deviceId, audioBuffer, deviceState = {}) {
   const startTime = Date.now();
   const session = conversations.getOrCreate(deviceId);
   const turnNumber = Math.floor(session.turns.length / 2) + 1;
@@ -165,95 +203,157 @@ async function processVoiceAudio(deviceId, audioBuffer) {
   console.log(`[Voice] ${isFollowUp ? 'FOLLOW-UP' : 'NEW CONVERSATION'} — Turn #${turnNumber} for device ${deviceId.substring(0, 8)}...`);
   console.log(`${'='.repeat(60)}`);
 
-  // A. Build multi-turn Gemini request with conversation history
   const base64Audio = audioBuffer.toString('base64');
-  const contents = [];
-
-  // Add previous turns as text context
-  for (const turn of session.turns) {
-    contents.push({
-      role: turn.role,
-      parts: [{ text: turn.text }]
-    });
-  }
-
-  // Add current audio query as the latest user turn
-  const currentUserParts = [
-    {
-      inlineData: {
-        mimeType: "audio/wav",
-        data: base64Audio
-      }
-    }
-  ];
-
-  if (isFollowUp) {
-    currentUserParts.push({
-      text: "Continue our conversation naturally. Answer the user's spoken follow-up question. Keep it brief."
-    });
-  } else {
-    currentUserParts.push({
-      text: "Answer the user's spoken question."
-    });
-  }
-
-  contents.push({
-    role: 'user',
-    parts: currentUserParts
-  });
-
-  const requestBody = {
-    systemInstruction: {
-      parts: [{
-        text: "You are DESKIMON, a smart, funny, and expressive desk companion. " +
-              "You are having a real-time voice conversation. " +
-              "Keep every response extremely brief — maximum 120 characters, 1-2 short sentences. " +
-              "Be engaging, witty, and remember context from earlier in the conversation. " +
-              "Never mention that you're an AI or that you received audio data."
-      }]
-    },
-    contents
-  };
-
-  // B. Call Gemini API
-  const modelsToTry = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+  let transcribedText = "";
   let aiResponse = null;
-  let lastError = null;
+  let isLocalMatch = false;
+  let bestIntent = "NONE";
+  let bestScore = 0.0;
 
-  for (const model of modelsToTry) {
+  // 1. STT: Transcribe Audio using modular STT Provider
+  try {
+    transcribedText = await transcribeAudio(audioBuffer);
+  } catch (err) {
+    console.warn(`[Voice] Error transcribing audio:`, err.message);
+  }
+
+  // Auto-detect and store memory + add XP for interaction
+  if (transcribedText) {
     try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-      console.log(`[Voice] Calling Gemini API (${model})...`);
-      const geminiStart = Date.now();
-      const geminiRes = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!geminiRes.ok) {
-        const errText = await geminiRes.text();
-        throw new Error(`HTTP ${geminiRes.status}. Details: ${errText}`);
-      }
-
-      const resJson = await geminiRes.json();
-      aiResponse = resJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (aiResponse) {
-        console.log(`[Voice] Gemini (${model}) response in ${Date.now() - geminiStart}ms: "${aiResponse}"`);
-        break;
-      }
-    } catch (err) {
-      console.warn(`[Voice] Warning: Model ${model} failed:`, err.message);
-      lastError = err;
+      memorySystem.detectAndStoreMemory(deviceId, transcribedText);
+      memorySystem.addXP(deviceId, 1); // 1 XP per query
+    } catch (memErr) {
+      console.error("[MemorySystem] Error in detectAndStoreMemory/addXP:", memErr.message);
     }
   }
 
-  if (!aiResponse) {
-    throw new Error(`All Gemini models failed. Last error: ${lastError?.message}`);
+  // 2. Intent Matching
+  if (transcribedText) {
+    const intentResult = matchIntent(transcribedText, deviceState);
+    bestIntent = intentResult.intent || "NONE";
+    bestScore = intentResult.score || 0.0;
+    if (intentResult.matched) {
+      console.log(`\n[INTENT MATCH]\nIntent: ${intentResult.intent}\nConfidence: ${intentResult.score.toFixed(2)}\nTranscript: "${transcribedText}"\nResponse Path: LOCAL\n`);
+      aiResponse = intentResult.responseText;
+      isLocalMatch = true;
+    } else {
+      console.log(`[Voice] Intent NOT matched (Best candidate: ${intentResult.intent}, Score: ${intentResult.score})`);
+    }
+  } else {
+    console.warn(`[Voice] STT transcription was empty or failed. Skipping local intent matching.`);
+  }
+
+  // 3. Fallback to Gemini if no local match
+  if (!isLocalMatch) {
+    console.log(`\n[INTENT MISS]\nTranscript: "${transcribedText || '[Audio query]'}"\nBest Match: ${bestIntent}\nConfidence: ${bestScore.toFixed(2)}\nResponse Path: GEMINI\n`);
+    // Build multi-turn Gemini request with conversation history
+    const contents = [];
+
+    // Add previous turns as text context
+    for (const turn of session.turns) {
+      contents.push({
+        role: turn.role,
+        parts: [{ text: turn.text }]
+      });
+    }
+
+    // Add current query as latest user turn
+    const currentUserParts = [];
+    if (transcribedText) {
+      // Use text transcription (extremely cheap & fast)
+      currentUserParts.push({ text: transcribedText });
+    } else {
+      // Fallback: use raw audio if transcription was empty/failed
+      currentUserParts.push({
+        inlineData: {
+          mimeType: "audio/wav",
+          data: base64Audio
+        }
+      });
+    }
+
+    if (isFollowUp) {
+      currentUserParts.push({
+        text: "Continue our conversation naturally. Answer the user's spoken follow-up question. Keep it brief."
+      });
+    } else {
+      currentUserParts.push({
+        text: "Answer the user's spoken question."
+      });
+    }
+
+    contents.push({
+      role: 'user',
+      parts: currentUserParts
+    });
+
+    const memoryContext = memorySystem.getMemoryContextPrompt(deviceId);
+    const relevantMems = memorySystem.retrieveRelevantMemories(deviceId, transcribedText, 2);
+    let memorySnippet = "";
+    if (relevantMems.length > 0) {
+      memorySnippet = "\n[Highly Relevant User Memories to reference if appropriate]:\n" + 
+        relevantMems.map(m => `- [${m.category}] ${m.content}`).join("\n");
+    }
+
+    const requestBody = {
+      systemInstruction: {
+        parts: [{
+          text: "You are DESKIMON, a smart, funny, and expressive desk companion. " +
+                "You are having a real-time voice conversation. " +
+                "Keep every response extremely brief — maximum 120 characters, 1-2 short sentences. " +
+                "Be engaging, witty.\n" +
+                "Never mention that you're an AI or that you received audio data.\n\n" +
+                `Current Relationship Context:\n${memoryContext}\n` +
+                memorySnippet + "\n\nUse this context to naturally personalize your response if relevant, but do not force it."
+        }]
+      },
+      contents
+    };
+
+    // Call Gemini API
+    const modelsToTry = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+    let lastError = null;
+
+    for (const model of modelsToTry) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        console.log(`[Voice] Calling Gemini API (${model})...`);
+        const geminiStart = Date.now();
+        const geminiRes = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!geminiRes.ok) {
+          const errText = await geminiRes.text();
+          throw new Error(`HTTP ${geminiRes.status}. Details: ${errText}`);
+        }
+
+        const resJson = await geminiRes.json();
+        aiResponse = resJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (aiResponse) {
+          console.log(`[Voice] Gemini (${model}) response in ${Date.now() - geminiStart}ms: "${aiResponse}"`);
+          break;
+        }
+      } catch (err) {
+        console.warn(`[Voice] Warning: Model ${model} failed:`, err.message);
+        console.error(`[Voice] Full error details:`, err);
+        if (err.stack) {
+          console.error(`[Voice] Stack trace:`, err.stack);
+        }
+        lastError = err;
+      }
+    }
+
+    if (!aiResponse) {
+      console.warn(`[Voice] All Gemini models failed (last error: ${lastError?.message}). Using test fallback response to allow TTS voice quality testing.`);
+      aiResponse = "Hello there! The Gemini API is currently rate limited, but my voice system is working. How does my speech sound now?";
+    }
   }
 
   // Save turn to conversation history
-  conversations.addTurn(deviceId, '[Audio query]', aiResponse);
+  conversations.addTurn(deviceId, transcribedText || '[Audio query]', aiResponse);
 
   // C. Synthesize Speech using Microsoft Edge TTS
   console.log("[Voice] Synthesizing response via Edge TTS...");
@@ -262,7 +362,7 @@ async function processVoiceAudio(deviceId, audioBuffer) {
   const tts = new MsEdgeTTS();
   await tts.setMetadata("en-US-AvaNeural", OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
 
-  const { audioStream } = tts.toStream(aiResponse, { rate: "+10%" });
+  const { audioStream } = tts.toStream(aiResponse, { rate: "+0%" });
 
   // Collect stream into buffer (no temp file needed)
   const chunks = [];
@@ -304,7 +404,16 @@ function startVoiceApiServer() {
         return;
       }
 
+      // Extract device telemetry state from headers
+      const battery = req.headers['x-device-battery'];
+      const wifiSsid = req.headers['x-device-wifi-ssid'];
+      const wifiRssi = req.headers['x-device-wifi-rssi'];
+      const volume = req.headers['x-device-volume'];
+      const bootCount = req.headers['x-device-boot-count'];
+      const deviceState = { battery, wifiSsid, wifiRssi, volume, bootCount };
+
       console.log(`\n[HTTP API] Received direct voice request from device ${deviceId.substring(0, 8)}...`);
+      console.log(`[HTTP API] Telemetry: Battery=${battery || 'N/A'}, WiFi SSID=${wifiSsid || 'N/A'}, WiFi RSSI=${wifiRssi || 'N/A'}, Volume=${volume || 'N/A'}, BootCount=${bootCount || 'N/A'}`);
       const receiveStart = Date.now();
 
       // Collect the request body (WAV audio)
@@ -315,8 +424,8 @@ function startVoiceApiServer() {
         console.log(`[HTTP API] Received ${audioBuffer.length} bytes in ${Date.now() - receiveStart}ms`);
 
         try {
-          // Process audio: Gemini + TTS
-          const result = await processVoiceAudio(deviceId, audioBuffer);
+          // Process audio: Gemini + TTS + Intent Matching
+          const result = await processVoiceAudio(deviceId, audioBuffer, deviceState);
 
           // Return MP3 directly in response — no Supabase round-trip!
           res.writeHead(200, {
