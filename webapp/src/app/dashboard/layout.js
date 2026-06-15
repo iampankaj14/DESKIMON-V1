@@ -175,8 +175,12 @@ export default function DashboardLayout({ children }) {
       console.log("Speech recognized:", resultText);
       setRecognitionText(resultText);
       
+      // Clean wake word for API processing
+      const cleanResult = checkAndCleanWakeWord(resultText);
+      const queryText = cleanResult.detected && cleanResult.cleaned === "" ? "hi" : (cleanResult.cleaned || resultText);
+      
       // Process question with Gemini
-      await processWithGemini(resultText);
+      await processWithGemini(queryText);
     };
     
     recognitionObj.onerror = (err) => {
@@ -807,4 +811,31 @@ export default function DashboardLayout({ children }) {
       )}
     </div>
   );
+}
+
+// Helper to detect and strip wake word robustly
+function checkAndCleanWakeWord(text) {
+  if (!text) return { detected: false, cleaned: "" };
+
+  const trimmed = text.trim();
+  const normalized = trimmed.toLowerCase().replace(/^[.,\/#!$%\^&\*;:{}=\-_`~()?'"’?]+|[.,\/#!$%\^&\*;:{}=\-_`~()?'"’?]+$/g, "");
+
+  const wakeWordRegex = /^(?:hi|hey|hello)?\s*(?:spark|sparc|stark|smart|speak|speed|bark|park|mark)\b/i;
+
+  const match = normalized.match(wakeWordRegex);
+  if (match) {
+    const matchedPart = match[0];
+    let remaining = normalized.slice(matchedPart.length).trim();
+    remaining = remaining.replace(/^[.,\/#!$%\^&\*;:{}=\-_`~()?'"’? ]+/, "").trim();
+
+    return {
+      detected: true,
+      cleaned: remaining
+    };
+  }
+
+  return {
+    detected: false,
+    cleaned: trimmed
+  };
 }

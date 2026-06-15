@@ -14,7 +14,7 @@ const BRANDING = {
   nameDisplay: "Deskimon",
   tagline: "Your Living Desk Companion",
   description: "A smart, expressive desk companion that reacts to your voice, touch, and motion — powered by AI.",
-  wakeWord: "Hey Deskimon",
+  wakeWord: "Hey Spark",
   domain: "deskimon.com",
   version: "1.0.0",
 
@@ -42,7 +42,7 @@ const BRANDING = {
     {
       icon: "🎤",
       title: "Voice Conversations",
-      description: "Say 'Hey Deskimon' and have natural conversations. It listens, thinks, and replies with personality.",
+      description: "Say 'Hey Spark' and have natural conversations. It listens, thinks, and replies with personality.",
     },
     {
       icon: "👁️",

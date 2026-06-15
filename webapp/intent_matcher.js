@@ -100,7 +100,7 @@ function cleanText(text) {
       words.shift();
     }
     // Strip trailing polite/filler terms
-    if (words.length > 2 && ['please', 'thanks', 'thankyou', 'buddy', 'deskimon'].includes(words[words.length - 1])) {
+    if (words.length > 2 && ['please', 'thanks', 'thankyou', 'buddy', 'deskimon', 'spark', 'sparc', 'stark', 'smart'].includes(words[words.length - 1])) {
       words.pop();
     }
     cleaned = words.join(' ');
@@ -192,7 +192,10 @@ function getPhraseSimilarity(userInput, targetPhrase) {
   const tokenSim = getTokenSimilarity(userInput, targetPhrase);
 
   let substringBoost = 0.0;
-  if (cleanTarget.length > 3 && (cleanInput.includes(cleanTarget) || cleanTarget.includes(cleanInput))) {
+  const inputWords = cleanInput.split(' ').filter(w => w.length > 0);
+  if (cleanTarget.length > 3 && 
+      (cleanInput.length >= 6 || inputWords.length >= 2) && 
+      (cleanInput.includes(cleanTarget) || cleanTarget.includes(cleanInput))) {
     // Proportional boost based on length ratio (max 0.15 boost)
     const ratio = Math.min(cleanTarget.length, cleanInput.length) / Math.max(cleanTarget.length, cleanInput.length);
     substringBoost = ratio * 0.15;
@@ -270,7 +273,15 @@ function formatResponse(template, deviceState = {}) {
  * @returns {object} Match result: { matched: boolean, intent: string, score: number, responseText: string }
  */
 function matchIntent(rawInput, deviceState = {}) {
-  const cleanInput = cleanText(rawInput);
+  let processedInput = rawInput;
+  if (rawInput) {
+    const wakeResult = checkAndCleanWakeWord(rawInput);
+    if (wakeResult.detected) {
+      processedInput = wakeResult.cleaned;
+    }
+  }
+
+  const cleanInput = cleanText(processedInput);
   if (!cleanInput) {
     return { matched: false, intent: null, score: 0.0, responseText: "" };
   }
@@ -480,10 +491,58 @@ function getIntentScores(rawInput) {
   return scores.sort((a, b) => b.score - a.score);
 }
 
+/**
+ * Detects new wake words ("Hi Spark", "Hey Spark", "Spark") case-insensitively,
+ * allowing minor variations, and returns the cleaned text.
+ * 
+ * @param {string} text - Transcription from STT
+ * @returns {object} { detected: boolean, cleaned: string }
+ */
+function checkAndCleanWakeWord(text) {
+  if (!text) return { detected: false, cleaned: "" };
+
+  const trimmed = text.trim();
+  // Normalize text for matching: lowercase, strip leading/trailing spaces, remove initial/trailing punctuation
+  const normalized = trimmed.toLowerCase().replace(/^[.,\/#!$%\^&\*;:{}=\-_`~()?'"’?]+|[.,\/#!$%\^&\*;:{}=\-_`~()?'"’?]+$/g, "");
+
+  // Match optional leading "hi" or "hey" or "hello", followed by space/punctuation, then the target word (spark, sparc, stark, smart, etc.)
+  const wakeWordRegex = /^(?:hi|hey|hello)?\s*(?:spark|sparc|stark|smart|speak|speed|bark|park|mark)\b/i;
+
+  const match = normalized.match(wakeWordRegex);
+  if (match) {
+    const matchedPart = match[0].trim();
+    let remaining = normalized.slice(match[0].length).trim();
+    // Clean up leading punctuation from remaining text (e.g. if it was "Hi Spark, how are you" -> "how are you")
+    remaining = remaining.replace(/^[.,\/#!$%\^&\*;:{}=\-_`~()?'"’? ]+/, "").trim();
+
+    // Map empty remaining text to a standard greeting
+    if (remaining === "") {
+      if (matchedPart.startsWith("hey")) {
+        remaining = "hey";
+      } else if (matchedPart.startsWith("hello")) {
+        remaining = "hello";
+      } else {
+        remaining = "hi";
+      }
+    }
+
+    return {
+      detected: true,
+      cleaned: remaining
+    };
+  }
+
+  return {
+    detected: false,
+    cleaned: trimmed
+  };
+}
+
 module.exports = {
   matchIntent,
   cleanText,
   getPhraseSimilarity,
   formatResponse,
-  getIntentScores
+  getIntentScores,
+  checkAndCleanWakeWord
 };

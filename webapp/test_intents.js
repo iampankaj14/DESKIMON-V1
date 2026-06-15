@@ -13,7 +13,7 @@ const mockDeviceState = {
 const testCases = [
   // Greetings
   { query: "hello there", expectedIntent: "GREETING_HELLO" },
-  { query: "hey deskimon", expectedIntent: "GREETING_HEY" },
+  { query: "hey spark", expectedIntent: "GREETING_HEY" },
   { query: "hi", expectedIntent: "GREETING_HI" },
   { query: "good morning buddy", expectedIntent: "GREETING_MORNING" },
   { query: "good afternoon", expectedIntent: "GREETING_AFTERNOON" },

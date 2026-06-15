@@ -105,7 +105,7 @@ export default function DeviceListPage() {
           tts_voice: 'en-US-Neural2-D',
           conversation_timeout_ms: 15000,
           sleep_after_idle_ms: 30000,
-          wake_word: 'Hey Deskimon'
+          wake_word: 'Hey Spark'
         });
 
       if (prefsError) throw prefsError;

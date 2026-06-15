@@ -5,7 +5,7 @@
     "name_display": "Deskimon",
     "tagline": "Your Living Desk Companion",
     "description": "A smart, expressive desk companion that reacts to your voice, touch, and motion — powered by AI.",
-    "wake_word": "Hey Deskimon",
+    "wake_word": "Hey Spark",
     "domain": "deskimon.com",
     "version": "1.0.0"
   },

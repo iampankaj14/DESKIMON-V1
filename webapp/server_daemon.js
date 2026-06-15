@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { createClient } = require('@supabase/supabase-js');
-const { matchIntent } = require('./intent_matcher');
+const { matchIntent, checkAndCleanWakeWord } = require('./intent_matcher');
 const GroqSTTProvider = require('./providers/groq_provider');
 const GeminiSTTProvider = require('./providers/gemini_provider');
 const TTSProvider = require('./tts_provider');
@@ -101,11 +101,10 @@ async function authenticate() {
   });
 
   if (error) {
-    console.error("Error setting session:", error.message);
-    process.exit(1);
+    console.warn("[Auth] Warning: Error setting session:", error.message, "- Proceeding with anonymous/fallback access.");
+  } else {
+    console.log("Authentication successful.");
   }
-  
-  console.log("Authentication successful.");
   
   // Listen for token refreshes and save them back to session.json
   supabase.auth.onAuthStateChange((event, session) => {
@@ -228,6 +227,21 @@ async function processVoiceAudio(deviceId, audioBuffer, deviceState = {}) {
     console.warn(`[Voice] Error transcribing audio:`, err.message);
   }
 
+  // Detect and strip wake word
+  let wakeWordDetected = false;
+  if (transcribedText) {
+    const wakeResult = checkAndCleanWakeWord(transcribedText);
+    if (wakeResult.detected) {
+      wakeWordDetected = true;
+      if (wakeResult.cleaned === "") {
+        // Only wake word was spoken, default to a greeting
+        transcribedText = "hi";
+      } else {
+        transcribedText = wakeResult.cleaned;
+      }
+    }
+  }
+
   // Auto-detect milestone / store memory + add XP for interaction
   let milestoneResult = null;
   if (transcribedText) {
@@ -247,6 +261,8 @@ async function processVoiceAudio(deviceId, audioBuffer, deviceState = {}) {
     console.log(`\n[MILESTONE CELEBRATION]\nType: ${milestoneResult.type}\nResponse: "${milestoneResult.response}"\n`);
     aiResponse = milestoneResult.response;
     isLocalMatch = true;
+    bestIntent = milestoneResult.type;
+    bestScore = 1.0;
   } else if (transcribedText) {
     const intentResult = matchIntent(transcribedText, deviceState);
     bestIntent = intentResult.intent || "NONE";
@@ -261,6 +277,15 @@ async function processVoiceAudio(deviceId, audioBuffer, deviceState = {}) {
   } else {
     console.warn(`[Voice] STT transcription was empty or failed. Skipping local intent matching.`);
   }
+
+  // Temporary Logging for Routing Trace (Task 1)
+  console.log("==================== [ROUTING TRACE START] ====================");
+  console.log(`[ROUTING TRACE] STT transcript: "${transcribedText || '[Empty/Failed]'}"`);
+  console.log(`[ROUTING TRACE] Matched intent: "${bestIntent}"`);
+  console.log(`[ROUTING TRACE] Confidence score: ${bestScore}`);
+  console.log(`[ROUTING TRACE] Selected response path: ${isLocalMatch ? 'LOCAL_INTENT' : 'GEMINI_FALLBACK'}`);
+  console.log("===================== [ROUTING TRACE END] =====================");
+
 
   // 3. Fallback to Gemini if no local match
   if (!isLocalMatch) {
@@ -352,10 +377,14 @@ async function processVoiceAudio(deviceId, audioBuffer, deviceState = {}) {
         const resJson = await geminiRes.json();
         aiResponse = resJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         if (aiResponse) {
+          console.log(`[ROUTING TRACE] Gemini model ${model} invocation: SUCCESS. Response: "${aiResponse}"`);
           console.log(`[Voice] Gemini (${model}) response in ${Date.now() - geminiStart}ms: "${aiResponse}"`);
           break;
+        } else {
+          console.log(`[ROUTING TRACE] Gemini model ${model} invocation: EMPTY_RESPONSE`);
         }
       } catch (err) {
+        console.log(`[ROUTING TRACE] Gemini model ${model} invocation: ERROR (${err.message})`);
         console.warn(`[Voice] Warning: Model ${model} failed:`, err.message);
         console.error(`[Voice] Full error details:`, err);
         if (err.stack) {

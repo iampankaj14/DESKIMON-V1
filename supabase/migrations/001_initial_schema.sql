@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS public.device_preferences (
     -- Behavior
     conversation_timeout_ms INTEGER NOT NULL DEFAULT 15000,
     sleep_after_idle_ms INTEGER NOT NULL DEFAULT 30000,
-    wake_word TEXT NOT NULL DEFAULT 'Hey Deskimon',
+    wake_word TEXT NOT NULL DEFAULT 'Hey Spark',
     -- Timestamps
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

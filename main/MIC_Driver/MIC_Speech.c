@@ -21,6 +21,7 @@
 #include "freertos/timers.h"
 
 #define I2S_CHANNEL_NUM 1
+#define USE_MULTINET_AS_WAKEWORD 1
 
 // Follow-up listening configuration
 #define FOLLOWUP_TIMEOUT_MS      15000   // 15-second follow-up window
@@ -169,7 +170,7 @@ static void start_recording(void)
 // WAV FILE WRITING
 // ============================================================
 
-static void write_wav_file(const char *filepath, int16_t *pcm_data, uint32_t num_samples)
+static __attribute__((unused)) void write_wav_file(const char *filepath, int16_t *pcm_data, uint32_t num_samples)
 {
     FILE *f = fopen(filepath, "wb");
     if (!f) {
@@ -430,7 +431,7 @@ static void detect_hander(AppSpeech *self)
         switch (s_conv_state) {
 
         // ----------------------------------------------------------
-        // IDLE: Normal wake word detection via AFE
+        // IDLE: Continuous MultiNet command spotter for "Spark" keywords or original WakeNet
         // ----------------------------------------------------------
         case CONV_STATE_IDLE: {
             afe_fetch_result_t* res = self->afe_handle->fetch(afe_data); 
@@ -440,6 +441,52 @@ static void detect_hander(AppSpeech *self)
                 break;
             }
 
+#if USE_MULTINET_AS_WAKEWORD
+            // Feed the audio chunk to MultiNet to scan for the custom keyword
+            int64_t start_time = esp_timer_get_time();
+            esp_mn_state_t mn_state = multinet->detect(model_data, res->data);
+            int64_t end_time = esp_timer_get_time();
+            int64_t duration_us = end_time - start_time;
+            
+            // Calculate task CPU core usage percentage (each chunk is afe_chunksize samples at 16kHz)
+            float chunk_duration_us = (afe_chunksize * 1000000.0f) / 16000.0f;
+            float task_cpu_usage = (duration_us / chunk_duration_us) * 100.0f;
+
+            if (mn_state == ESP_MN_STATE_DETECTED) {
+                esp_mn_results_t *mn_res = multinet->get_results(model_data);
+                if (mn_res && mn_res->num > 0) {
+                    int cmd_id = mn_res->command_id[0];
+                    ESP_LOGI(TAG, "=== MULTINET DETECTED command_id: %d, phrase: %s, prob: %f ===", 
+                             cmd_id, mn_res->string, mn_res->prob[0]);
+                    
+                    if (cmd_id == 5 || cmd_id == 6 || cmd_id == 7) {
+                        ESP_LOGI(TAG, "=== SPARK WAKEWORD DETECTED! ===");
+                        ESP_LOGI(TAG, "Detection Latency: %lld us (%f%% task CPU usage)", duration_us, task_cpu_usage);
+                        ESP_LOGI(TAG, "RAM Stats - Free Heap: %lu bytes (Internal: %lu, SPIRAM: %lu)",
+                                 (unsigned long)esp_get_free_heap_size(),
+                                 (unsigned long)esp_get_free_internal_heap_size(),
+                                 (unsigned long)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+                        
+                        multinet->clean(model_data);
+                        LCD_Backlight_original = LCD_Backlight;
+                        
+                        // Disable wake word and multinet detection during conversation
+                        self->afe_handle->disable_wakenet(afe_data);
+                        self->detected = true;
+                        
+                        // Visual + cloud feedback
+                        LCD_Backlight = 35;
+                        Cloud_SetListeningState(true);
+                        Deskimon_SetEmotion("listening");
+                        
+                        // Transition directly to LISTENING and start recording
+                        s_conv_state = CONV_STATE_LISTENING;
+                        start_recording();
+                        ESP_LOGI(TAG, "State: IDLE -> LISTENING (via Spark trigger)");
+                    }
+                }
+            }
+#else
             if (res->wakeup_state == WAKENET_DETECTED) {
                 ESP_LOGI(TAG, "=== WAKEWORD DETECTED ===\n");
                 multinet->clean(model_data);
@@ -447,6 +494,7 @@ static void detect_hander(AppSpeech *self)
                 s_conv_state = CONV_STATE_WAKE_DETECTED;
                 ESP_LOGI(TAG, "State: IDLE -> WAKE_DETECTED");
             }
+#endif
             break;
         }
 
@@ -586,14 +634,11 @@ static void detect_hander(AppSpeech *self)
             break;
         }
 
-        // ==========================================================
-        // MULTINET command detection (only during initial IDLE detection)
-        // This preserves existing voice command functionality
-        // ==========================================================
         if (self->detected && s_conv_state == CONV_STATE_IDLE) {
             // We shouldn't be detected AND idle normally,
             // but handle gracefully just in case
             self->afe_handle->enable_wakenet(afe_data);
+            multinet->clean(model_data);
             self->detected = false;
         }
     }
@@ -618,6 +663,10 @@ void MIC_Speech_init()
     } else {
         ESP_LOGI(TAG, "Allocated 160KB record buffer in SPIRAM successfully.");
     }
+    ESP_LOGI(TAG, "Speech Init RAM Stats - Free Heap: %lu bytes (Internal: %lu, SPIRAM: %lu)",
+             (unsigned long)esp_get_free_heap_size(),
+             (unsigned long)esp_get_free_internal_heap_size(),
+             (unsigned long)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
    
     // Create follow-up inactivity timer (one-shot, initially stopped)
     s_followup_timer = xTimerCreate(
@@ -676,7 +725,14 @@ void MIC_Speech_init()
     afe_config.pcm_config.mic_num = 1;
     afe_config.pcm_config.ref_num = 0;
     afe_config.pcm_config.sample_rate = 16000;
+#if USE_MULTINET_AS_WAKEWORD
+    // Disable WakeNet in the AFE config
+    afe_config.wakenet_init = false;
+    afe_config.wakenet_model_name = NULL;
+    ESP_LOGI(TAG, "Continuous MultiNet Wake Word Spotter enabled (WakeNet bypassed)");
+#else
     afe_config.wakenet_model_name = esp_srmodel_filter(MIC_Speech.models, ESP_WN_PREFIX, NULL);
+#endif
     MIC_Speech.afe_data = MIC_Speech.afe_handle->create_from_config(&afe_config);
     xTaskCreatePinnedToCore((TaskFunction_t)feed_handler, "App/SR/Feed", 4 * 1024, &MIC_Speech, 5, NULL, 1);
     xTaskCreatePinnedToCore((TaskFunction_t)detect_hander, "App/SR/Detect", 5 * 1024, &MIC_Speech, 5, NULL, 1);

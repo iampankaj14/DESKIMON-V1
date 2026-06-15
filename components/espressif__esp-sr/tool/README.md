@@ -31,10 +31,10 @@ pip install g2p_en
 #### 2. Run multinet_g2p.py
 
 ```
-python multinet_g2p.py -t "hello world,hi ESP;turn on the light;turn off the light"
+python multinet_g2p.py -t "hello world,hi Spark;turn on the light;turn off the light"
 
 ------
-in: hello world,hi ESP;turn on the light;turn off the light
+in: hello world,hi Spark;turn on the light;turn off the light
 out: hcLb WkLD,hi fST;TkN nN jc LiT;TkN eF jc LiT;
 ```
 
@@ -60,7 +60,7 @@ ESP Speech Recognition -> Add speech commands
 char *new_commands_str="hcLb WkLD,hi fST;TkN nN jc LiT;TkN eF jc LiT;"  //
 char err_id[256];
 multinet->reset(model_data, new_commands_str, err_id);
-// hello world,hi ESP -> commond id=0
+// hello world,hi Spark -> commond id=0
 // turn on the light -> commond id=1
 // turn off the light -> commond id=2
 ```
