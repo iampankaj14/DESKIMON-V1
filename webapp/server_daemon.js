@@ -8,6 +8,7 @@ const GeminiSTTProvider = require('./providers/gemini_provider');
 const TTSProvider = require('./tts_provider');
 const memorySystem = require('./memory_system');
 const milestoneSystem = require('./milestone_system');
+const { buildSystemInstruction } = require('./spark_personality');
 
 
 // 1. Load Environment Variables manually from .env.local
@@ -34,16 +35,16 @@ const GROQ_API_KEY = env.NEXT_PUBLIC_GROQ_API_KEY || process.env.NEXT_PUBLIC_GRO
 const STT_PROVIDER = env.STT_PROVIDER || process.env.STT_PROVIDER || 'groq';
 const VOICE_API_PORT = parseInt(env.VOICE_API_PORT || process.env.VOICE_API_PORT || '3001', 10);
 
-const TTS_PROVIDER = env.TTS_PROVIDER || process.env.TTS_PROVIDER || 'cartesia';
-const CARTESIA_API_KEY = env.CARTESIA_API_KEY || process.env.CARTESIA_API_KEY;
-const CARTESIA_VOICE_NAME = env.CARTESIA_VOICE_NAME || process.env.CARTESIA_VOICE_NAME || 'Nolan';
+const TTS_PROVIDER = env.TTS_PROVIDER || process.env.TTS_PROVIDER || 'elevenlabs';
+const ELEVENLABS_API_KEY = env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY;
+const ELEVENLABS_VOICE_ID = env.ELEVENLABS_VOICE_ID || process.env.ELEVENLABS_VOICE_ID;
 
 const groqSTT = new GroqSTTProvider(GROQ_API_KEY);
 const geminiSTT = new GeminiSTTProvider(GEMINI_API_KEY);
 const ttsProvider = new TTSProvider({
   provider: TTS_PROVIDER,
-  cartesiaApiKey: CARTESIA_API_KEY,
-  cartesiaVoiceName: CARTESIA_VOICE_NAME
+  elevenLabsApiKey: ELEVENLABS_API_KEY,
+  elevenLabsVoiceId: ELEVENLABS_VOICE_ID
 });
 
 
@@ -191,6 +192,39 @@ class ConversationManager {
 // Create global conversation manager: 60-second TTL, keep last 10 turns (5 exchanges)
 const conversations = new ConversationManager(60000, 10);
 
+// ==================================================================
+// DEVICE PRESET CACHE — avoids a Supabase query on every request
+// Entries expire after 60 seconds so dashboard changes take effect quickly
+// ==================================================================
+const presetCache = new Map(); // deviceId -> { preset, customPrompt, fetchedAt }
+const PRESET_CACHE_TTL_MS = 60000;
+
+async function fetchDevicePreset(deviceId) {
+  const now = Date.now();
+  const cached = presetCache.get(deviceId);
+  if (cached && (now - cached.fetchedAt) < PRESET_CACHE_TTL_MS) {
+    return { preset: cached.preset, customPrompt: cached.customPrompt };
+  }
+  try {
+    const { data, error } = await supabase
+      .from('device_preferences')
+      .select('personality_preset, personality_custom_prompt')
+      .eq('device_id', deviceId)
+      .single();
+    if (error || !data) {
+      console.warn(`[Preset] Could not fetch preset for ${deviceId.substring(0, 8)}... Using default.`, error?.message);
+      return { preset: 'playful', customPrompt: '' };
+    }
+    const result = { preset: data.personality_preset || 'playful', customPrompt: data.personality_custom_prompt || '' };
+    presetCache.set(deviceId, { ...result, fetchedAt: now });
+    console.log(`[Preset] Device ${deviceId.substring(0, 8)}... preset = '${result.preset}'`);
+    return result;
+  } catch (err) {
+    console.warn(`[Preset] Exception fetching preset:`, err.message);
+    return { preset: 'playful', customPrompt: '' };
+  }
+}
+
 // ============================================================
 // CORE VOICE PROCESSING — Gemini + TTS (shared by both paths)
 // ============================================================
@@ -318,11 +352,11 @@ async function processVoiceAudio(deviceId, audioBuffer, deviceState = {}) {
 
     if (isFollowUp) {
       currentUserParts.push({
-        text: "Continue our conversation naturally. Answer the user's spoken follow-up question. Keep it brief."
+        text: "Continue our conversation naturally. Answer the follow-up question. Keep it brief."
       });
     } else {
       currentUserParts.push({
-        text: "Answer the user's spoken question."
+        text: "Answer the question."
       });
     }
 
@@ -331,25 +365,23 @@ async function processVoiceAudio(deviceId, audioBuffer, deviceState = {}) {
       parts: currentUserParts
     });
 
+    // Fetch device personality preset (cached, 60s TTL)
+    const { preset, customPrompt } = await fetchDevicePreset(deviceId);
+
     const memoryContext = memorySystem.getMemoryContextPrompt(deviceId);
     const relevantMems = memorySystem.retrieveRelevantMemories(deviceId, transcribedText, 2);
     let memorySnippet = "";
     if (relevantMems.length > 0) {
-      memorySnippet = "\n[Highly Relevant User Memories to reference if appropriate]:\n" + 
-        relevantMems.map(m => `- [${m.category}] ${m.content}`).join("\n");
+      memorySnippet = relevantMems.map(m => `- [${m.category}] ${m.content}`).join("\n");
     }
+
+    // Build system instruction from single source of truth
+    const systemInstructionText = buildSystemInstruction(preset, customPrompt, memoryContext, memorySnippet);
+    console.log(`[Gemini] Using personality preset: '${preset}'`);
 
     const requestBody = {
       systemInstruction: {
-        parts: [{
-          text: "You are DESKIMON, a smart, funny, and expressive desk companion. " +
-                "You are having a real-time voice conversation. " +
-                "Keep every response extremely brief — maximum 120 characters, 1-2 short sentences. " +
-                "Be engaging, witty.\n" +
-                "Never mention that you're an AI or that you received audio data.\n\n" +
-                `Current Relationship Context:\n${memoryContext}\n` +
-                memorySnippet + "\n\nUse this context to naturally personalize your response if relevant, but do not force it."
-        }]
+        parts: [{ text: systemInstructionText }]
       },
       contents
     };
@@ -641,7 +673,7 @@ async function run() {
   });
 
   console.log("\n╔══════════════════════════════════════════════════════════╗");
-  console.log("║   DESKIMON AI Daemon v3.0 — Direct API + Fallback     ║");
+  console.log("║   Spark AI Daemon v3.1 — Unified Personality Engine    ║");
   console.log("╚══════════════════════════════════════════════════════════╝\n");
   
   // --- REALTIME (bonus, may not work depending on Supabase config) ---
