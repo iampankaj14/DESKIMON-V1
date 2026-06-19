@@ -9,6 +9,7 @@ const TTSProvider = require('./tts_provider');
 const memorySystem = require('./memory_system');
 const milestoneSystem = require('./milestone_system');
 const { buildSystemInstruction } = require('./spark_personality');
+const { discoverKeys } = require('./config/key_discovery');
 
 
 // 1. Load Environment Variables manually from .env.local
@@ -30,6 +31,7 @@ if (fs.existsSync(envPath)) {
 
 const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Legacy single-key vars (still used by Supabase and direct gemini/groq calls in processVoiceAudio)
 const GEMINI_API_KEY = env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 const GROQ_API_KEY = env.NEXT_PUBLIC_GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY || env.GROQ_API_KEY || process.env.GROQ_API_KEY;
 const STT_PROVIDER = env.STT_PROVIDER || process.env.STT_PROVIDER || 'groq';
@@ -39,11 +41,17 @@ const TTS_PROVIDER = env.TTS_PROVIDER || process.env.TTS_PROVIDER || 'elevenlabs
 const ELEVENLABS_API_KEY = env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY;
 const ELEVENLABS_VOICE_ID = env.ELEVENLABS_VOICE_ID || process.env.ELEVENLABS_VOICE_ID;
 
-const groqSTT = new GroqSTTProvider(GROQ_API_KEY);
-const geminiSTT = new GeminiSTTProvider(GEMINI_API_KEY);
+// Dynamic key pools — read GROQ_KEY_1, GROQ_KEY_2, ... / GEMINI_KEY_1, ... / ELEVENLABS_KEY_1, ...
+// Falls back to single legacy key if _N keys are not set (backward compatible)
+const GROQ_KEYS = discoverKeys('GROQ_KEY', env, GROQ_API_KEY);
+const GEMINI_KEYS = discoverKeys('GEMINI_KEY', env, GEMINI_API_KEY);
+const ELEVENLABS_KEYS = discoverKeys('ELEVENLABS_KEY', env, ELEVENLABS_API_KEY);
+
+const groqSTT = new GroqSTTProvider(GROQ_KEYS[0] || GROQ_API_KEY);
+const geminiSTT = new GeminiSTTProvider(GEMINI_KEYS[0] || GEMINI_API_KEY);
 const ttsProvider = new TTSProvider({
   provider: TTS_PROVIDER,
-  elevenLabsApiKey: ELEVENLABS_API_KEY,
+  elevenLabsApiKey: ELEVENLABS_KEYS[0] || ELEVENLABS_API_KEY,
   elevenLabsVoiceId: ELEVENLABS_VOICE_ID
 });
 
