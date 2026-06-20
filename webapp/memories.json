@@ -1,0 +1,24 @@
+{
+  "devices": {
+    "a800f38b-2697-49dd-8331-a300c603deba": {
+      "memories": [],
+      "relationship": {
+        "level": 2,
+        "xp": 123,
+        "positiveInteractions": 0,
+        "negativeInteractions": 0,
+        "lastInteractionAt": "2026-06-14T15:04:25.057Z"
+      }
+    },
+    "a800f38b-test-latency": {
+      "memories": [],
+      "relationship": {
+        "level": 1,
+        "xp": 29,
+        "positiveInteractions": 0,
+        "negativeInteractions": 0,
+        "lastInteractionAt": "2026-06-13T19:09:40.889Z"
+      }
+    }
+  }
+}

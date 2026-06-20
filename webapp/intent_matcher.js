@@ -2,12 +2,21 @@ const fs = require('fs');
 const path = require('path');
 
 // Load intents
-const intentsPath = path.join(__dirname, 'intents.json');
 let intentsData = { intents: [] };
 try {
-  intentsData = JSON.parse(fs.readFileSync(intentsPath, 'utf8'));
+  intentsData = require('./intents.json');
 } catch (err) {
-  console.error("Failed to load intents.json:", err.message);
+  try {
+    const intentsPath = path.join(__dirname, 'intents.json');
+    intentsData = JSON.parse(fs.readFileSync(intentsPath, 'utf8'));
+  } catch (err2) {
+    try {
+      const intentsPathFallback = path.join(process.cwd(), 'intents.json');
+      intentsData = JSON.parse(fs.readFileSync(intentsPathFallback, 'utf8'));
+    } catch (err3) {
+      console.error("Failed to load intents.json:", err3.message);
+    }
+  }
 }
 
 // Caches for production performance optimization (latency reduction)

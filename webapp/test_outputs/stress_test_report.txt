@@ -1,0 +1,12 @@
+==================================================
+STRESS TEST REPORT
+==================
+Total Queries:      10000
+Correct Matches:    8390 (Matching expected intent)
+Incorrect Matches:  3 (Matching different intent - False Positives)
+False Positives:    3
+Fallbacks/Rejects:  1607 (No match/Gemini fallback)
+Accuracy (Strict):  83.90%
+False Positive Rate: 0.03%
+Duration:           503.57 seconds
+==================================================

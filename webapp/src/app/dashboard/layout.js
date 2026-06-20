@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -34,11 +34,11 @@ export default function DashboardLayout({ children }) {
   const [assistantStatus, setAssistantStatus] = useState('Standby');
   const [timeLeft, setTimeLeft] = useState(60);
   const [timerId, setTimerId] = useState(null);
-  const [recognitionObj, setRecognitionObj] = useState(null);
+  const recognitionRef = useRef(null);
   const [micActive, setMicActive] = useState(false);
   const [micError, setMicError] = useState('');
 
-  const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  // GEMINI_API_KEY is no longer needed client-side — the /api/voice-text route handles it server-side
 
   // Initialize Speech Recognition on Mount
   useEffect(() => {
@@ -49,7 +49,7 @@ export default function DashboardLayout({ children }) {
         rec.continuous = false;
         rec.interimResults = false;
         rec.lang = 'en-US';
-        setRecognitionObj(rec);
+        recognitionRef.current = rec;
       }
     }
   }, []);
@@ -89,7 +89,7 @@ export default function DashboardLayout({ children }) {
         console.warn("Query permission warning:", err);
       });
     }
-  }, [recognitionObj]);
+  }, []);
 
   // Poll active device status & subscribe to real-time status updates
   useEffect(() => {
@@ -147,10 +147,11 @@ export default function DashboardLayout({ children }) {
     if (activeDevice && activeDevice.is_listening && !listeningOverlay) {
       startVoiceSession();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDevice?.is_listening]);
 
-  const startVoiceSession = async () => {
-    if (!recognitionObj) {
+  async function startVoiceSession() {
+    if (!recognitionRef.current) {
       console.warn("Speech recognition not supported or not loaded yet.");
       return;
     }
@@ -165,25 +166,22 @@ export default function DashboardLayout({ children }) {
     setRecognitionText('');
     setAiResponseText('');
     
-    recognitionObj.onstart = () => {
+    recognitionRef.current.onstart = () => {
       console.log("Speech recognition started...");
       setAssistantStatus('Listening');
     };
     
-    recognitionObj.onresult = async (event) => {
+    recognitionRef.current.onresult = async (event) => {
       const resultText = event.results[0][0].transcript;
       console.log("Speech recognized:", resultText);
       setRecognitionText(resultText);
       
-      // Clean wake word for API processing
-      const cleanResult = checkAndCleanWakeWord(resultText);
-      const queryText = cleanResult.detected && cleanResult.cleaned === "" ? "hi" : (cleanResult.cleaned || resultText);
-      
-      // Process question with Gemini
-      await processWithGemini(queryText);
+      // Send raw text to unified API route — it handles wake word cleaning,
+      // intent matching, and Gemini fallback with the canonical Spark prompt
+      await processVoiceQuery(resultText);
     };
     
-    recognitionObj.onerror = (err) => {
+    recognitionRef.current.onerror = (err) => {
       if (err.error !== 'no-speech' && err.error !== 'aborted') {
         console.error("Speech recognition error event:", err.error, err.message, err);
       } else {
@@ -211,7 +209,7 @@ export default function DashboardLayout({ children }) {
       }
     };
     
-    recognitionObj.onend = () => {
+    recognitionRef.current.onend = () => {
       console.log("Speech recognition ended.");
       if (listeningOverlay && assistantStatus.includes('Waiting')) {
         restartListeningSilently();
@@ -219,54 +217,120 @@ export default function DashboardLayout({ children }) {
     };
     
     try {
-      recognitionObj.start();
+      recognitionRef.current.start();
     } catch (e) {
       console.error("Failed to start recognition:", e);
     }
-  };
+  }
 
-  const restartListeningSilently = () => {
-    if (!recognitionObj) return;
+  function restartListeningSilently() {
+    if (!recognitionRef.current) return;
     try {
-      recognitionObj.start();
+      recognitionRef.current.start();
     } catch (e) {
       // Ignore if already running
     }
-  };
+  }
 
-  const processWithGemini = async (query) => {
+  async function closeVoiceSession() {
+    console.log("Closing voice interaction session...");
+    setListeningOverlay(false);
+    setAssistantStatus('Standby');
+    
+    if (timerId) {
+      clearInterval(timerId);
+      setTimerId(null);
+    }
+    
+    const activeId = localStorage.getItem('deskimon_active_device_id');
+    if (activeId) {
+      await supabase
+        .from('devices')
+        .update({ is_listening: false })
+        .eq('id', activeId);
+    }
+    
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
+  }
+
+  const startContinuousTimer = useCallback(() => {
+    if (timerId) clearInterval(timerId);
+    setTimeLeft(60);
+    
+    const tid = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(tid);
+          closeVoiceSession();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    setTimerId(tid);
+    
+    // Automatically restart speech recognition after response is sent
+    setTimeout(() => {
+      restartListeningSilently();
+    }, 4000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timerId]);
+
+  const processVoiceQuery = useCallback(async (query) => {
     setAssistantStatus('Processing');
     const activeId = localStorage.getItem('deskimon_active_device_id');
     if (!activeId) return;
     
     try {
-      console.log("Using API key:", GEMINI_API_KEY ? `${GEMINI_API_KEY.substring(0, 5)}...` : 'undefined');
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY || ''}`;
-      
-      const requestBody = {
-        contents: {
-          parts: [
-            {
-              text: `You are DESKIMON, a smart, funny, and expressive desk companion. Keep your response extremely brief, engaging, and friendly. Maximum 120 characters and 1-2 short sentences. User query: "${query}"`
-            }
-          ]
+      // Fetch personality preset from Supabase (browser-side)
+      let preset = 'playful';
+      let customPrompt = '';
+      try {
+        const { data: prefs } = await supabase
+          .from('device_preferences')
+          .select('personality_preset, personality_custom_prompt')
+          .eq('device_id', activeId)
+          .single();
+        if (prefs) {
+          preset = prefs.personality_preset || 'playful';
+          customPrompt = prefs.personality_custom_prompt || '';
         }
-      };
-      
-      const response = await fetch(geminiUrl, {
+      } catch (_) {
+        // Non-fatal: fall back to default preset
+      }
+      console.log(`[Dashboard Voice] Using personality preset: '${preset}'`);
+
+      // Call unified API route — handles wake word cleaning, intent matching,
+      // and Gemini fallback with the canonical Spark prompt from spark_personality.js
+      const startMs = Date.now();
+      const response = await fetch('/api/voice-text', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query,
+          deviceId: activeId,
+          preset,
+          customPrompt
+        })
       });
-      
-      console.log("Gemini API HTTP Status:", response.status);
+
       const resJson = await response.json();
-      console.log("Gemini API response JSON:", resJson);
-      
-      const aiResponse = resJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "I couldn't process that.";
-      console.log("Gemini Response:", aiResponse);
+      const latencyMs = Date.now() - startMs;
+
+      if (!response.ok) {
+        throw new Error(resJson.error || `API error ${response.status}`);
+      }
+
+      const aiResponse = resJson.response || 'The signal was unclear. Try again.';
+      console.log(`[Dashboard Voice] Response (${resJson.source}): "${aiResponse}" [${latencyMs}ms]`);
+      if (resJson.intent) {
+        console.log(`[Dashboard Voice] Intent: ${resJson.intent} (score: ${resJson.score})`);
+      }
       setAiResponseText(aiResponse);
       
       setAssistantStatus('Responding');
@@ -290,7 +354,7 @@ export default function DashboardLayout({ children }) {
           user_input: query,
           ai_response: aiResponse,
           emotion_triggered: 'happy',
-          latency_ms: 300
+          latency_ms: latencyMs
         });
 
       // Clear the audio_url after 3.5 seconds so it is ready for subsequent triggers
@@ -306,59 +370,12 @@ export default function DashboardLayout({ children }) {
       startContinuousTimer();
       
     } catch (err) {
-      console.error("Error processing with Gemini/TTS:", err);
+      console.error("Error processing voice query:", err);
       setAssistantStatus('Error');
       setTimeout(() => closeVoiceSession(), 3000);
     }
-  };
-
-  const startContinuousTimer = () => {
-    if (timerId) clearInterval(timerId);
-    setTimeLeft(60);
-    
-    const tid = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(tid);
-          closeVoiceSession();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    
-    setTimerId(tid);
-    
-    // Automatically restart speech recognition after response is sent
-    setTimeout(() => {
-      restartListeningSilently();
-    }, 4000);
-  };
-
-  const closeVoiceSession = async () => {
-    console.log("Closing voice interaction session...");
-    setListeningOverlay(false);
-    setAssistantStatus('Standby');
-    
-    if (timerId) {
-      clearInterval(timerId);
-      setTimerId(null);
-    }
-    
-    const activeId = localStorage.getItem('deskimon_active_device_id');
-    if (activeId) {
-      await supabase
-        .from('devices')
-        .update({ is_listening: false })
-        .eq('id', activeId);
-    }
-    
-    if (recognitionObj) {
-      try {
-        recognitionObj.stop();
-      } catch (e) {}
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startContinuousTimer]);
 
   // Authenticate user on mount
   useEffect(() => {
@@ -708,7 +725,7 @@ export default function DashboardLayout({ children }) {
             {/* Assistant Status */}
             <div>
               <h3 className="text-display" style={{ fontSize: '22px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                DESKIMON AI Brain
+                Spark
               </h3>
               <p style={{ 
                 color: assistantStatus === 'Listening' ? 'var(--color-primary)' : 
@@ -745,7 +762,7 @@ export default function DashboardLayout({ children }) {
               )}
               {aiResponseText && (
                 <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '10px' }}>
-                  <span style={{ color: 'var(--color-success)', fontWeight: '600' }}>🤖 Deskimon: </span>
+                  <span style={{ color: 'var(--color-success)', fontWeight: '600' }}>✦ Spark: </span>
                   <span style={{ color: 'var(--text-primary)', fontWeight: '500' }}>&quot;{aiResponseText}&quot;</span>
                 </div>
               )}
@@ -811,31 +828,4 @@ export default function DashboardLayout({ children }) {
       )}
     </div>
   );
-}
-
-// Helper to detect and strip wake word robustly
-function checkAndCleanWakeWord(text) {
-  if (!text) return { detected: false, cleaned: "" };
-
-  const trimmed = text.trim();
-  const normalized = trimmed.toLowerCase().replace(/^[.,\/#!$%\^&\*;:{}=\-_`~()?'"’?]+|[.,\/#!$%\^&\*;:{}=\-_`~()?'"’?]+$/g, "");
-
-  const wakeWordRegex = /^(?:hi|hey|hello)?\s*(?:spark|sparc|stark|smart|speak|speed|bark|park|mark)\b/i;
-
-  const match = normalized.match(wakeWordRegex);
-  if (match) {
-    const matchedPart = match[0];
-    let remaining = normalized.slice(matchedPart.length).trim();
-    remaining = remaining.replace(/^[.,\/#!$%\^&\*;:{}=\-_`~()?'"’? ]+/, "").trim();
-
-    return {
-      detected: true,
-      cleaned: remaining
-    };
-  }
-
-  return {
-    detected: false,
-    cleaned: trimmed
-  };
 }

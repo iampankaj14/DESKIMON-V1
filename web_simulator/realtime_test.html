@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DESKIMON — Realtime Syncer & Test Suite</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #050505;
+            --bg-secondary: #0c0c0e;
+            --bg-card: #121215;
+            --accent-primary: #00ffff;
+            --accent-glow: rgba(0, 255, 255, 0.4);
+            --border-color: #1f1f23;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-tertiary: #6b7280;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            padding: 40px 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 36px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #fff 0%, #a5f3fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-primary), #7b61ff);
+            opacity: 0.8;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+
+        .status-badge {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 99px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-disconnected {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .status-connected {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .status-connecting {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .device-simulator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #030303;
+            border: 4px solid #141416;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            position: relative;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.9), 0 10px 30px rgba(0,0,0,0.8);
+        }
+
+        .device-reflection {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 45%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .eyes-container {
+            display: flex;
+            gap: 32px;
+            align-items: center;
+        }
+
+        .eye {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            box-shadow: 0 0 20px var(--accent-primary), 0 0 45px var(--accent-primary);
+            transition: background 0.4s ease, box-shadow 0.4s ease, transform 0.2s ease;
+        }
+
+        .eye-label {
+            margin-top: 16px;
+            font-size: 12px;
+            color: var(--text-tertiary);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+        }
+
+        input[type="text"] {
+            background: #09090b;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: white;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            flex: 1;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--accent-primary);
+        }
+
+        .btn {
+            background: var(--accent-primary);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px var(--accent-glow);
+        }
+
+        .btn-secondary {
+            background: #1f1f23;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: #27272c;
+            box-shadow: none;
+        }
+
+        .palette-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .palette-btn {
+            background: #18181b;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+            color: var(--text-primary);
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .palette-btn:hover {
+            border-color: var(--text-secondary);
+        }
+
+        .color-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .logs-panel {
+            background: #060608;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            height: 250px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            color: #e4e4e7;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 8px;
+            line-height: 1.5;
+        }
+
+        .log-time {
+            color: var(--text-tertiary);
+            flex-shrink: 0;
+        }
+
+        .log-info { color: #a1a1aa; }
+        .log-success { color: var(--success); }
+        .log-warn { color: var(--warning); }
+        .log-error { color: var(--danger); }
+        .log-inbound { color: #60a5fa; }
+        .log-outbound { color: #c084fc; }
+
+        .config-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .config-table th, .config-table td {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+            text-align: left;
+        }
+
+        .config-table th {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .config-val {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>DESKIMON Realtime Sync Test Suite</h1>
+            <p class="subtitle">Simulate & verify physical hardware connections to Supabase WebSockets</p>
+        </header>
+
+        <div class="grid">
+            <!-- Left Side Controls and Logs -->
+            <div style="display: flex; flex-direction: column; gap: 24px;">
+                <!-- Setup Credentials -->
+                <div class="card">
+                    <div class="card-title">
+                        <span>Database Configuration</span>
+                        <div id="wsBadge" class="status-badge status-disconnected">
+                            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span>
+                            Disconnected
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="deviceId">Target Device ID (UUID)</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="deviceId" value="51c45765-db74-4a38-b2a4-1b765a97cf44" placeholder="Enter Device UUID">
+                            <button id="connectBtn" class="btn">Connect Sync</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Trigger Database Color Change (Simulate Dashboard Updates)</label>
+                        <div class="palette-grid">
+                            <button class="palette-btn" onclick="updateDbColor('#00FFFF')">
+                                <span class="color-dot" style="background: #00FFFF; box-shadow: 0 0 6px #00FFFF;"></span>
+                                Cyan
+                            </button>
+                            <button class="palette-btn" onclick="updateDbColor('#ADFF2F')">
+                                <span class="color-dot" style="background: #ADFF2F; box-shadow: 0 0 6px #ADFF2F;"></span>
+                                Volt Yellow
+                            </button>
+                            <button class="palette-btn" onclick="updateDbColor('#FF1493')">
+                                <span class="color-dot" style="background: #FF1493; box-shadow: 0 0 6px #FF1493;"></span>
+                                Hot Pink
+                            </button>
+                            <button class="palette-btn" onclick="updateDbColor('#7B61FF')">
+                                <span class="color-dot" style="background: #7B61FF; box-shadow: 0 0 6px #7B61FF;"></span>
+                                Purple
+                            </button>
+                            <button class="palette-btn" onclick="updateDbColor('#FF4500')">
+                                <span class="color-dot" style="background: #FF4500; box-shadow: 0 0 6px #FF4500;"></span>
+                                Lava Orange
+                            </button>
+                            <button class="palette-btn" onclick="updateDbColor('#00FA9A')">
+                                <span class="color-dot" style="background: #00FA9A; box-shadow: 0 0 6px #00FA9A;"></span>
+                                Emerald
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WebSockets Logs Console -->
+                <div class="card">
+                    <div class="card-title">
+                        <span>Realtime Transaction Logs</span>
+                        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="clearLogs()">Clear</button>
+                    </div>
+                    <div id="logs" class="logs-panel"></div>
+                </div>
+            </div>
+
+            <!-- Right Side Device Screen Simulation -->
+            <div style="display: flex; flex-direction: column; gap: 24px;">
+                <div class="card">
+                    <div class="card-title">Device Screen Simulator</div>
+                    <div class="device-simulator" id="deviceSim">
+                        <div class="device-reflection"></div>
+                        <div class="eyes-container">
+                            <div class="eye" id="eyeL"></div>
+                            <div class="eye" id="eyeR"></div>
+                        </div>
+                        <div class="eye-label" id="eyeColorText">Hex: #00ffff</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Active Sync Info</div>
+                    <table class="config-table">
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Current Value</th>
+                        </tr>
+                        <tr>
+                            <td>Realtime Status</td>
+                            <td id="syncStatus" class="config-val">IDLE</td>
+                        </tr>
+                        <tr>
+                            <td>Active Topic</td>
+                            <td id="syncTopic" class="config-val">—</td>
+                        </tr>
+                        <tr>
+                            <td>Last Update</td>
+                            <td id="syncTime" class="config-val">—</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Supabase library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
+    <script>
+        const SUPABASE_URL = 'https://cnbwttjojlrconmargzh.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNuYnd0dGpvamxyY29ubWFyZ3poIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NTkxMTEsImV4cCI6MjA5NjEzNTExMX0.lnv5XcSBzLvbvVf-rLdq-ioOXUsKCBuoISrrwNKnw5w';
+        
+        let ws = null;
+        let heartbeatInterval = null;
+        let heartbeatRef = 1;
+        const deviceIdInput = document.getElementById('deviceId');
+        const connectBtn = document.getElementById('connectBtn');
+        const wsBadge = document.getElementById('wsBadge');
+        const logsContainer = document.getElementById('logs');
+        const eyeL = document.getElementById('eyeL');
+        const eyeR = document.getElementById('eyeR');
+        const eyeColorText = document.getElementById('eyeColorText');
+        const syncStatus = document.getElementById('syncStatus');
+        const syncTopic = document.getElementById('syncTopic');
+        const syncTime = document.getElementById('syncTime');
+
+        // Create Supabase REST client
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        function log(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            
+            let typeClass = 'log-info';
+            let prefix = '⚙️';
+            if (type === 'success') { typeClass = 'log-success'; prefix = '✅'; }
+            if (type === 'error') { typeClass = 'log-error'; prefix = '❌'; }
+            if (type === 'warn') { typeClass = 'log-warn'; prefix = '⚠️'; }
+            if (type === 'inbound') { typeClass = 'log-inbound'; prefix = '📥'; }
+            if (type === 'outbound') { typeClass = 'log-outbound'; prefix = '📤'; }
+
+            logEntry.innerHTML = `<span class="log-time">[${time}]</span><span class="${typeClass}">${prefix} ${message}</span>`;
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        function clearLogs() {
+            logsContainer.innerHTML = '';
+        }
+
+        function setBadgeState(state) {
+            wsBadge.className = 'status-badge';
+            if (state === 'disconnected') {
+                wsBadge.classList.add('status-disconnected');
+                wsBadge.innerHTML = '<span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span> Disconnected';
+                connectBtn.innerText = 'Connect Sync';
+                connectBtn.style.background = 'var(--accent-primary)';
+            } else if (state === 'connecting') {
+                wsBadge.classList.add('status-connecting');
+                wsBadge.innerHTML = '<span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span> Connecting';
+                connectBtn.innerText = 'Connecting...';
+            } else if (state === 'connected') {
+                wsBadge.classList.add('status-connected');
+                wsBadge.innerHTML = '<span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor;"></span> Connected';
+                connectBtn.innerText = 'Disconnect';
+                connectBtn.style.background = 'var(--danger)';
+            }
+        }
+
+        async function updateDbColor(hex) {
+            const deviceId = deviceIdInput.value.trim();
+            log(`Dashboard Trigger: Updating database eye_color to ${hex}...`, 'info');
+            
+            try {
+                const { data, error } = await supabaseClient
+                    .from('device_preferences')
+                    .update({ eye_color: hex, updated_at: new Date().toISOString() })
+                    .eq('device_id', deviceId)
+                    .select();
+
+                if (error) throw error;
+                log(`Database successfully updated to ${hex}!`, 'success');
+            } catch (err) {
+                log(`Failed to update database: ${err.message}`, 'error');
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+            setBadgeState('disconnected');
+            syncStatus.innerText = 'DISCONNECTED';
+            syncTopic.innerText = '—';
+            log('Sync service disconnected.', 'info');
+        }
+
+        function connect() {
+            const deviceId = deviceIdInput.value.trim();
+            if (!deviceId) {
+                log('Device UUID is required to connect.', 'error');
+                return;
+            }
+
+            disconnect();
+            setBadgeState('connecting');
+            log(`Initializing WebSocket client...`, 'info');
+
+            // Build exact ws url as used in C driver:
+            const wsUri = `wss://cnbwttjojlrconmargzh.supabase.co/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`;
+            log(`Connecting to: ${wsUri.substring(0, 50)}...`, 'info');
+
+            try {
+                ws = new WebSocket(wsUri);
+
+                ws.onopen = () => {
+                    setBadgeState('connected');
+                    syncStatus.innerText = 'CONNECTED';
+                    log('Realtime WebSocket connected! Subscribing to preferences channel...', 'success');
+
+                    // Join channel using Phoenix/Supabase Realtime v2 format (matches C driver exactly)
+                    const topic = `realtime:device_prefs_${deviceId}`;
+                    syncTopic.innerText = topic;
+
+                    const joinMsg = {
+                        topic: topic,
+                        event: "phx_join",
+                        payload: {
+                            config: {
+                                postgres_changes: [
+                                    {
+                                        event: "UPDATE",
+                                        schema: "public",
+                                        table: "device_preferences",
+                                        filter: `device_id=eq.${deviceId}`
+                                    }
+                                ]
+                            }
+                        },
+                        ref: "1"
+                    };
+
+                    log(`Sending subscription request: ${JSON.stringify(joinMsg)}`, 'outbound');
+                    ws.send(JSON.stringify(joinMsg));
+
+                    // Start Phoenix heartbeat task (every 25 seconds, matches C driver)
+                    heartbeatRef = 1;
+                    heartbeatInterval = setInterval(() => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            const hbMsg = {
+                                topic: "phoenix",
+                                event: "heartbeat",
+                                payload: {},
+                                ref: String(heartbeatRef++)
+                            };
+                            log('Sending Phoenix heartbeat.', 'outbound');
+                            ws.send(JSON.stringify(hbMsg));
+                        }
+                    }, 25000);
+                };
+
+                ws.onmessage = (event) => {
+                    log(`Inbound message received: ${event.data}`, 'inbound');
+                    
+                    try {
+                        const root = JSON.parse(event.data);
+                        if (root.event === "postgres_changes" && root.payload && root.payload.data) {
+                            const record = root.payload.data.record;
+                            if (record && record.eye_color) {
+                                const newColor = record.eye_color;
+                                log(`SUCCESS! Received real-time eye_color change event: ${newColor}`, 'success');
+                                
+                                // Update screen simulation
+                                eyeL.style.background = newColor;
+                                eyeR.style.background = newColor;
+                                eyeL.style.boxShadow = `0 0 20px ${newColor}, 0 0 45px ${newColor}`;
+                                eyeR.style.boxShadow = `0 0 20px ${newColor}, 0 0 45px ${newColor}`;
+                                eyeColorText.innerText = `Hex: ${newColor.toUpperCase()}`;
+                                
+                                syncTime.innerText = new Date().toLocaleTimeString();
+                                syncStatus.innerText = 'SYNCED';
+
+                                // Add a subtle visual scale animation to the eyes to show the trigger
+                                eyeL.style.transform = 'scale(1.2)';
+                                eyeR.style.transform = 'scale(1.2)';
+                                setTimeout(() => {
+                                    eyeL.style.transform = 'scale(1)';
+                                    eyeR.style.transform = 'scale(1)';
+                                }, 250);
+                            }
+                        } else if (root.event === "phx_reply") {
+                            log('Subscription reply received.', 'info');
+                        }
+                    } catch (err) {
+                        log(`Error parsing websocket message: ${err.message}`, 'error');
+                    }
+                };
+
+                ws.onclose = () => {
+                    log('WebSocket connection closed.', 'warn');
+                    disconnect();
+                };
+
+                ws.onerror = (err) => {
+                    log(`WebSocket error occurred.`, 'error');
+                    console.error(err);
+                };
+
+            } catch (err) {
+                log(`Failed to open WebSocket connection: ${err.message}`, 'error');
+                disconnect();
+            }
+        }
+
+        connectBtn.addEventListener('click', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                disconnect();
+            } else {
+                connect();
+            }
+        });
+
+        // Initialize display with default color
+        eyeL.style.background = '#FF4500';
+        eyeR.style.background = '#FF4500';
+        eyeColorText.innerText = 'Hex: #FF4500';
+
+        // Auto-connect on startup
+        connect();
+    </script>
+</body>
+</html>

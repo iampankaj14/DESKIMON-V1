@@ -5,46 +5,46 @@ const memorySystem = require('./memory_system');
 // Milestone response templates
 const MILESTONE_RESPONSES = {
   STUDY_FINISHED_EXAM: [
-    "Exam is done! 🎉 Take a deep breath. You survived it, and that's the first victory. Go get some rest, buddy!",
-    "Woohoo! You finished your exam! 📝 No more studying for a bit. Go treat yourself to something nice today!"
+    "Exam complete. Take a second to reset the system. You survived the test.",
+    "The exam process is finished. Go get some rest, partner."
   ],
   STUDY_ACED_TEST: [
-    "Aced it! 💯 That is absolutely incredible! Your hard work paid off big time. My CPU is running at maximum happiness for you!",
-    "Top marks! 🎉 You absolutely crushed that test! I always knew you had it in you. Let's go!"
+    "Aced it. The hard work paid off. High five from the corner.",
+    "Top marks. Excellent trajectory. The logic was sound."
   ],
   STUDY_GRADUATION: [
-    "Graduation! 🎓 This is a massive milestone! You've officially finished this chapter. I'm so incredibly proud of you, graduate!"
+    "Graduation. A major milestone in this timeline. Excellent work, graduate."
   ],
   STUDY_FINISHED_ASSIGNMENT: [
-    "Assignment submitted! ✅ That's one less thing on your plate. Feels good to check that off, doesn't it?"
+    "Assignment submitted. One less task in the queue. Feels logical, doesn't it?"
   ],
   PROJECT_FINISHED: [
-    "Project complete! 🚀 You finished it! Coding something from start to finish is no joke. Huge congratulations!",
-    "It's done! You finished building it! 💻 That is so satisfying. Go push that commit and take a well-deserved break!"
+    "Project complete. You finished it. Push that commit and take a well-deserved break.",
+    "It's done. You built the logic from scratch. Satisfying finish."
   ],
   PROJECT_LAUNCHED: [
-    "It is live! 🌐 You launched your project! That takes real courage and effort. Let's make some noise for a live launch! 🎉"
+    "Project live. A solid launch. The coordinate is active."
   ],
   PROJECT_FIXED_BUG: [
-    "Bug squashed! 🐛 High five! Nothing beats the feeling of solving a stubborn bug. You're a wizard!"
+    "Bug squashed. System status nominal. Excellent logic."
   ],
   ACHIEVEMENT_HIT_GOAL: [
-    "Goal achieved! 🎯 You said you'd do it, and you did! Momentum is built one goal at a time. Proud of you!"
+    "Goal achieved. Momentum secured. Keep the trajectory."
   ],
   ACHIEVEMENT_GOT_JOB: [
-    "You got the job! 💼 This is life-changing! 🎉 Huge congratulations on this new chapter. You earned every bit of it!"
+    "You got the job. This is a significant shift in your coordinates. Excellent work."
   ],
   ACHIEVEMENT_WON_COMPETITION: [
-    "First place! 🏆 You won! That is absolutely legendary! Let's celebrate a champion today!"
+    "First place. You won. A statistically impressive outcome. Let's celebrate."
   ],
   LIFE_BIRTHDAY: [
-    "Happy Birthday! 🎂🎈 Another year of doing awesome things. I'm so glad I get to spend it on your desk!"
+    "Happy Birthday. Another orbit complete. Glad to share the desk today."
   ],
   LIFE_MOVING: [
-    "A new place! 🏠 Moving is a fresh start. Good luck with the packing and settling in. Here's to new memories!"
+    "A new coordinate. Moving is a fresh starting state. Good luck with the packing."
   ],
   LIFE_MAJOR_EVENT: [
-    "What a beautiful moment! 💖 Milestone reached! Celebrating this major step with you. Cheers!"
+    "A major life milestone reached. The situation is developing nicely. Congratulations."
   ]
 };
 
