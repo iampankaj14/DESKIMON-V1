@@ -1,0 +1,10 @@
+{
+  "name": "key-rotation-system",
+  "version": "1.0.0",
+  "description": "API Key Rotation and Failover System",
+  "main": "demo.js",
+  "scripts": {
+    "start": "node demo.js"
+  },
+  "dependencies": {}
+}
