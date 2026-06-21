@@ -39,7 +39,7 @@ const mouthLaugh = document.getElementById('mouthLaugh');
 
 // Config State
 let activeExpression = 'neutral';
-let eyeColor = '#18d7e8';
+let eyeColor = '#1AC8DB';
 let eyeScale = 1.0;
 let eyeSpacing = 120;
 let blinkFreq = 4500;
@@ -267,16 +267,12 @@ function setExpression(expr) {
             break;
             
         case 'angry':
-            // Large size, RED color, top lid slanting down, inwards rotation
+            // Large size, top lid slanting down, inwards rotation
             eyeLeft.style.width = '130px';
             eyeLeft.style.height = '180px';
-            eyeLeft.style.backgroundColor = '#FF0000';
-            eyeLeft.style.boxShadow = '0 0 35px rgba(255,0,0,0.8)';
             
             eyeRight.style.width = '130px';
             eyeRight.style.height = '180px';
-            eyeRight.style.backgroundColor = '#FF0000';
-            eyeRight.style.boxShadow = '0 0 35px rgba(255,0,0,0.8)';
             
             eyelidLeftTop.style.transform = 'translateY(-40px)';
             eyelidRightTop.style.transform = 'translateY(-40px)';
@@ -295,18 +291,14 @@ function setExpression(expr) {
             break;
             
         case 'sleepy':
-            // Highly squashed and dark cyan color
+            // Highly squashed
             eyeLeft.style.width = '90px';
             eyeLeft.style.height = '25px';
             eyeLeft.style.transform = 'translateY(40px)';
-            eyeLeft.style.backgroundColor = '#005555';
-            eyeLeft.style.boxShadow = '0 0 20px rgba(0,85,85,0.6)';
             
             eyeRight.style.width = '90px';
             eyeRight.style.height = '25px';
             eyeRight.style.transform = 'translateY(40px)';
-            eyeRight.style.backgroundColor = '#005555';
-            eyeRight.style.boxShadow = '0 0 20px rgba(0,85,85,0.6)';
             
             playBeep(400, 300, 0.4); // Yawn slide
             break;
@@ -529,9 +521,7 @@ function updateCodeBlock() {
     anim_prop(mask_moon_l, set_ty_cb, lv_obj_get_style_translate_y(mask_moon_l, 0), 40, 400);
     anim_prop(mask_moon_r, set_ty_cb, lv_obj_get_style_translate_y(mask_moon_r, 0), 40, 400);`;
     } else if (activeExpression === 'angry') {
-        stateLines = `    // Angry Expression: RED, enlarged, top lid down, slanted
-    lv_obj_set_style_bg_color(eye_l, lv_color_hex(0xFF0000), 0);
-    lv_obj_set_style_bg_color(eye_r, lv_color_hex(0xFF0000), 0);
+        stateLines = `    // Angry Expression: enlarged, top lid down, slanted
     animate_eye_base(eye_l, 130, 180, 0, 0, -40, 300);
     animate_eye_base(eye_r, 130, 180, 0, 0, -40, 300);
     anim_prop(mask_top_l, set_ty_cb, lv_obj_get_style_translate_y(mask_top_l, 0), -40, 300);
@@ -541,9 +531,7 @@ function updateCodeBlock() {
     animate_eye_base(eye_l, 100, 165, -12, 0, 0, 400);
     animate_eye_base(eye_r, 100, 165, 12, 0, 0, 400);`;
     } else if (activeExpression === 'sleepy') {
-        stateLines = `    // Sleepy Expression: low squashed shape, dark cyan
-    lv_obj_set_style_bg_color(eye_l, lv_color_hex(0x005555), 0);
-    lv_obj_set_style_bg_color(eye_r, lv_color_hex(0x005555), 0);
+        stateLines = `    // Sleepy Expression: low squashed shape
     animate_eye_base(eye_l, 90, 25, 0, 0, 40, 800);
     animate_eye_base(eye_r, 90, 25, 0, 0, 40, 800);`;
     } else if (activeExpression === 'cry') {

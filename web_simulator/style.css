@@ -510,14 +510,14 @@ body {
     transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-/* Insecure mouth (red circle) */
+/* Insecure mouth (cyan circle) */
 .mouth-insecure {
     position: absolute;
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background-color: #FF0000;
-    box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
     opacity: 0;
     transform: scale(0);
     transition: opacity 0.3s ease, transform 0.3s ease;

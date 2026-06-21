@@ -97,7 +97,7 @@ int QSPI_Init(void){
   };
   esp_lcd_panel_dev_config_t panel_config={
     .reset_gpio_num = EXAMPLE_LCD_PIN_NUM_RST,                                
-    .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR,                   
+    .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,                   
     // .data_endian = LCD_RGB_DATA_ENDIAN_LITTLE,                       
     .bits_per_pixel = EXAMPLE_LCD_COLOR_BITS,                                 
     .flags = {                                                    

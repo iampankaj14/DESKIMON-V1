@@ -499,8 +499,8 @@ export default function AppearancePage() {
               position: absolute;
               width: 20px; height: 20px;
               border-radius: 50%;
-              background-color: #FF0000;
-              box-shadow: 0 0 8px rgba(255, 0, 0, 0.5);
+              background-color: var(--eye-color);
+              box-shadow: 0 0 8px var(--eye-glow);
               opacity: 0;
               transform: scale(0);
               transition: opacity 0.3s ease, transform 0.3s ease;
@@ -626,8 +626,8 @@ export default function AppearancePage() {
                     width: (activeExpr === 'angry' || activeExpr === 'bored') ? '65px' : activeExpr === 'sleepy' ? '45px' : '50px',
                     height: (activeExpr === 'angry' || activeExpr === 'bored') ? '90px' : activeExpr === 'sleepy' ? '12px' : activeExpr === 'cry' || activeExpr === 'wtf' ? '8px' : '82px',
                     transform: activeExpr === 'sleepy' ? 'translateY(20px)' : activeExpr === 'cry' ? 'translateY(-10px)' : activeExpr === 'wtf' ? 'translateY(-22px)' : activeExpr === 'sad' ? 'rotate(-12deg)' : activeExpr === 'angry' ? 'rotate(15deg) translateY(-20px)' : activeExpr === 'bored' ? 'translateY(-20px)' : activeExpr === 'ooh' ? 'translateY(-5px) scaleY(0.8)' : activeExpr === 'chill' ? 'translateY(-25px)' : 'none',
-                    backgroundColor: activeExpr === 'angry' ? '#FF0000' : activeExpr === 'sleepy' ? '#005555' : eyeColor,
-                    boxShadow: activeExpr === 'angry' ? '0 0 15px #FF0000' : activeExpr === 'sleepy' ? '0 0 8px #005555' : `0 0 15px ${eyeColor}`,
+                    backgroundColor: eyeColor,
+                    boxShadow: `0 0 15px ${eyeColor}`,
                     opacity: ['interest', 'ignore', 'insecure'].includes(activeExpr) ? 0 : 1
                   }}
                 >
@@ -657,8 +657,8 @@ export default function AppearancePage() {
                   style={{
                     transform: activeExpr === 'interest' || activeExpr === 'insecure' ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0)',
                     opacity: activeExpr === 'interest' || activeExpr === 'insecure' ? 1 : 0,
-                    backgroundColor: activeExpr === 'insecure' ? '#FF0000' : eyeColor,
-                    boxShadow: activeExpr === 'insecure' ? '0 0 15px #FF0000' : `0 0 15px ${eyeColor}`
+                    backgroundColor: eyeColor,
+                    boxShadow: `0 0 15px ${eyeColor}`
                   }}
                 />
 
@@ -705,8 +705,8 @@ export default function AppearancePage() {
                     width: (activeExpr === 'angry' || activeExpr === 'bored') ? '65px' : activeExpr === 'sleepy' ? '45px' : '50px',
                     height: (activeExpr === 'angry' || activeExpr === 'bored') ? '90px' : activeExpr === 'sleepy' ? '12px' : activeExpr === 'cry' || activeExpr === 'wtf' ? '8px' : '82px',
                     transform: activeExpr === 'sleepy' ? 'translateY(20px)' : activeExpr === 'cry' ? 'translateY(-10px)' : activeExpr === 'wtf' ? 'translateY(-22px)' : activeExpr === 'sad' ? 'rotate(12deg)' : activeExpr === 'angry' ? 'rotate(-15deg) translateY(-20px)' : activeExpr === 'bored' ? 'translateY(-20px)' : activeExpr === 'ooh' ? 'translateY(-5px) scaleY(0.8)' : activeExpr === 'chill' ? 'translateY(-25px)' : 'none',
-                    backgroundColor: activeExpr === 'angry' ? '#FF0000' : activeExpr === 'sleepy' ? '#005555' : eyeColor,
-                    boxShadow: activeExpr === 'angry' ? '0 0 15px #FF0000' : activeExpr === 'sleepy' ? '0 0 8px #005555' : `0 0 15px ${eyeColor}`,
+                    backgroundColor: eyeColor,
+                    boxShadow: `0 0 15px ${eyeColor}`,
                     opacity: ['interest', 'ignore', 'insecure'].includes(activeExpr) ? 0 : 1
                   }}
                 >
@@ -736,8 +736,8 @@ export default function AppearancePage() {
                   style={{
                     transform: activeExpr === 'interest' || activeExpr === 'insecure' ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0)',
                     opacity: activeExpr === 'interest' || activeExpr === 'insecure' ? 1 : 0,
-                    backgroundColor: activeExpr === 'insecure' ? '#FF0000' : eyeColor,
-                    boxShadow: activeExpr === 'insecure' ? '0 0 15px #FF0000' : `0 0 15px ${eyeColor}`
+                    backgroundColor: eyeColor,
+                    boxShadow: `0 0 15px ${eyeColor}`
                   }}
                 />
 
