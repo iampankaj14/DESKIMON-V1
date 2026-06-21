@@ -29,10 +29,49 @@ typedef enum {
 
 static eye_state_t current_state = EYE_STATE_BOOT;
 
+// Face Preview Mode definitions
+typedef struct {
+    eye_state_t state;
+    const char * name;
+} registered_face_t;
+
+static const registered_face_t REGISTERED_FACES[] = {
+    {EYE_STATE_NORMAL,       "NORMAL"},
+    {EYE_STATE_BORED,        "BORED"},
+    {EYE_STATE_HAPPY,        "HAPPY"},
+    {EYE_STATE_ANGRY,        "ANGRY"},
+    {EYE_STATE_SLEEP,        "SLEEPY"},
+    {EYE_STATE_BLUSH,        "BLUSH"},
+    {EYE_STATE_BORING,       "BORING"},
+    {EYE_STATE_CHILL,        "CHILL"},
+    {EYE_STATE_CRY,          "CRYING"},
+    {EYE_STATE_CRYING_MOUTH, "CRYING MOUTH"},
+    {EYE_STATE_EYES_CLOSED,  "EYES CLOSED"},
+    {EYE_STATE_HAPPY_CRY,    "HAPPY CRY"},
+    {EYE_STATE_IGNORE,       "IGNORE"},
+    {EYE_STATE_INSECURE,     "INSECURE"},
+    {EYE_STATE_INTEREST,     "INTEREST"},
+    {EYE_STATE_OOH,          "OOH"},
+    {EYE_STATE_WTF,          "WTF"},
+    {EYE_STATE_LAUGH,        "LAUGH"}
+};
+#define NUM_REGISTERED_FACES (sizeof(REGISTERED_FACES) / sizeof(REGISTERED_FACES[0]))
+
+bool FACE_PREVIEW_MODE = true;
+static int s_preview_face_index = 0;
+static uint32_t s_preview_timer = 0;
+static lv_obj_t * preview_label = NULL;
+
 static uint32_t s_eye_color_hex = 0x00FFFF;
 static volatile bool s_eye_color_pending = false;
 static volatile eye_state_t s_pending_eye_state = EYE_STATE_MAX;
 static volatile bool s_eye_state_pending = false;
+
+static uint32_t press_start_time = 0;
+static bool is_screen_pressed = false;
+static bool dev_mode_toggle_triggered = false;
+static bool s_developer_mode = false;
+static lv_obj_t * dev_mode_label = NULL;
 
 // UI Objects
 static lv_obj_t * eye_l;
@@ -238,8 +277,77 @@ static void hide_all_accessories(uint32_t time) {
     lv_obj_set_style_opa(insec_cover_r, 0, 0);
 }
 
+static void update_preview_overlay(void) {
+    if (!s_developer_mode || !FACE_PREVIEW_MODE) {
+        if (preview_label != NULL) {
+            lv_obj_del(preview_label);
+            preview_label = NULL;
+        }
+        return;
+    }
+
+    if (preview_label == NULL) {
+        preview_label = lv_label_create(lv_scr_act());
+        lv_obj_set_style_text_color(preview_label, lv_color_hex(0xFFFFFF), 0);
+        lv_obj_set_style_text_align(preview_label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_align(preview_label, LV_ALIGN_BOTTOM_MID, 0, -35);
+        lv_obj_set_style_bg_color(preview_label, lv_color_hex(0x1A1A1A), 0);
+        lv_obj_set_style_bg_opa(preview_label, LV_OPA_80, 0);
+        lv_obj_set_style_border_width(preview_label, 1, 0);
+        lv_obj_set_style_border_color(preview_label, lv_color_hex(0x00FFFF), 0);
+        lv_obj_set_style_radius(preview_label, 8, 0);
+        lv_obj_set_style_pad_hor(preview_label, 15, 0);
+        lv_obj_set_style_pad_ver(preview_label, 8, 0);
+    }
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Face %d / %d\n%s",
+             s_preview_face_index + 1,
+             (int)NUM_REGISTERED_FACES,
+             REGISTERED_FACES[s_preview_face_index].name);
+    lv_label_set_text(preview_label, buf);
+}
+
+static void update_dev_mode_label(const char * name) {
+    if (!s_developer_mode) {
+        if (dev_mode_label != NULL) {
+            lv_obj_del(dev_mode_label);
+            dev_mode_label = NULL;
+        }
+        return;
+    }
+    
+    if (dev_mode_label == NULL) {
+        dev_mode_label = lv_label_create(lv_scr_act());
+        lv_obj_set_style_text_color(dev_mode_label, lv_color_hex(0xFFFFFF), 0);
+        lv_obj_align(dev_mode_label, LV_ALIGN_TOP_MID, 0, 20);
+        lv_obj_set_style_bg_color(dev_mode_label, lv_color_hex(0x222222), 0);
+        lv_obj_set_style_bg_opa(dev_mode_label, LV_OPA_70, 0);
+        lv_obj_set_style_border_width(dev_mode_label, 1, 0);
+        lv_obj_set_style_border_color(dev_mode_label, lv_color_hex(0x555555), 0);
+        lv_obj_set_style_radius(dev_mode_label, 5, 0);
+        lv_obj_set_style_pad_all(dev_mode_label, 5, 0);
+    }
+    
+    char buf[64];
+    snprintf(buf, sizeof(buf), "DEV: %s", name);
+    lv_label_set_text(dev_mode_label, buf);
+}
+
 static void update_name_label(const char * name) {
-    // Removed name label
+    if (FACE_PREVIEW_MODE && s_developer_mode) {
+        if (dev_mode_label != NULL) {
+            lv_obj_del(dev_mode_label);
+            dev_mode_label = NULL;
+        }
+        update_preview_overlay();
+    } else {
+        if (preview_label != NULL) {
+            lv_obj_del(preview_label);
+            preview_label = NULL;
+        }
+        update_dev_mode_label(name);
+    }
 }
 
 static void set_eyes_state(eye_state_t new_state) {
@@ -279,8 +387,8 @@ static void set_eyes_state(eye_state_t new_state) {
             
         case EYE_STATE_BORED:
             update_name_label("BORED");
-            animate_eye_base(eye_l, 130, 180, 0, 0, -40, 500);
-            animate_eye_base(eye_r, 130, 180, 0, 0, -40, 500);
+            animate_eye_base(eye_l, 130, 180, 0, -15, -40, 500);
+            animate_eye_base(eye_r, 130, 180, 0, 15, -40, 500);
             anim_prop(mask_top_l, set_ty_cb, lv_obj_get_style_translate_y(mask_top_l, 0), -40, 500);
             anim_prop(mask_top_r, set_ty_cb, lv_obj_get_style_translate_y(mask_top_r, 0), -40, 500);
             break;
@@ -297,8 +405,8 @@ static void set_eyes_state(eye_state_t new_state) {
             update_name_label("ANGRY");
             lv_obj_set_style_bg_color(eye_l, lv_color_hex(0xFF0000), 0);
             lv_obj_set_style_bg_color(eye_r, lv_color_hex(0xFF0000), 0);
-            animate_eye_base(eye_l, 130, 180, 0, 0, -40, 300); 
-            animate_eye_base(eye_r, 130, 180, 0, 0, -40, 300);
+            animate_eye_base(eye_l, 130, 180, 0, -15, -40, 300); 
+            animate_eye_base(eye_r, 130, 180, 0, 15, -40, 300);
             anim_prop(mask_top_l, set_ty_cb, lv_obj_get_style_translate_y(mask_top_l, 0), -40, 300);
             anim_prop(mask_top_r, set_ty_cb, lv_obj_get_style_translate_y(mask_top_r, 0), -40, 300);
             break;
@@ -478,7 +586,9 @@ static void logic_timer_cb(lv_timer_t * t)
 
     if (s_eye_state_pending) {
         s_eye_state_pending = false;
-        set_eyes_state(s_pending_eye_state);
+        if (!s_developer_mode) {
+            set_eyes_state(s_pending_eye_state);
+        }
     }
 
     if (s_eye_color_pending) {
@@ -501,6 +611,9 @@ static void logic_timer_cb(lv_timer_t * t)
         if (laugh_mouth) lv_obj_set_style_bg_color(laugh_mouth, color, 0);
         if (laugh_hemi_l) lv_obj_set_style_bg_color(laugh_hemi_l, color, 0);
         if (laugh_hemi_r) lv_obj_set_style_bg_color(laugh_hemi_r, color, 0);
+        if (insecure_eye_l) lv_obj_set_style_bg_color(insecure_eye_l, color, 0);
+        if (insecure_eye_r) lv_obj_set_style_bg_color(insecure_eye_r, color, 0);
+        if (insecure_mouth) lv_obj_set_style_bg_color(insecure_mouth, color, 0);
     }
 
     if (current_state == EYE_STATE_EYES_CLOSED) {
@@ -564,6 +677,43 @@ static void logic_timer_cb(lv_timer_t * t)
         }
     }
 
+    if (current_state == EYE_STATE_BOOT) {
+        if (state_time >= 1000) {
+            if (FACE_PREVIEW_MODE && s_developer_mode) {
+                s_preview_face_index = 0;
+                s_preview_timer = 0;
+                set_eyes_state(REGISTERED_FACES[0].state);
+            } else {
+                set_eyes_state(EYE_STATE_NORMAL);
+            }
+        }
+        return;
+    }
+
+    if (s_developer_mode) {
+        if (FACE_PREVIEW_MODE) {
+            s_preview_timer += 100;
+            if (s_preview_timer >= 5000) {
+                s_preview_timer = 0;
+                s_preview_face_index = (s_preview_face_index + 1) % NUM_REGISTERED_FACES;
+                set_eyes_state(REGISTERED_FACES[s_preview_face_index].state);
+            }
+        }
+
+        // Run the idle look-around animation for NORMAL state
+        if (current_state == EYE_STATE_NORMAL) {
+            if (state_time >= next_look_time) {
+                int32_t rx = (rand() % 100) - 50;
+                int32_t ry = (rand() % 60) - 30;
+                uint32_t speed = (rand() % 400) + 200;
+                animate_eye_base(eye_l, 100, 165, 0, rx, ry, speed);
+                animate_eye_base(eye_r, 100, 165, 0, rx, ry, speed);
+                next_look_time = state_time + speed + (rand() % 3000) + 1000;
+            }
+        }
+        return;
+    }
+
     // Check Accelerometer
     getAccelerometer();
     float dx = Accel.x - last_accel_x;
@@ -603,11 +753,7 @@ static void logic_timer_cb(lv_timer_t * t)
         }
     }
 
-    if (current_state == EYE_STATE_BOOT) {
-        if (state_time == 1000) {
-            set_eyes_state(EYE_STATE_NORMAL);
-        }
-    } else if (current_state == EYE_STATE_NORMAL) {
+    if (current_state == EYE_STATE_NORMAL) {
         if (idle_time > 7000) {
             set_eyes_state(EYE_STATE_BORING);
         } else if (state_time >= next_look_time) {
@@ -654,6 +800,7 @@ static void logic_timer_cb(lv_timer_t * t)
 static void screen_event_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_GESTURE) {
+        if (s_developer_mode) return;
         lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
         idle_time = 0;
         if (dir == LV_DIR_LEFT || dir == LV_DIR_RIGHT) {
@@ -667,38 +814,89 @@ static void screen_event_cb(lv_event_t * e) {
     }
 
     if (code == LV_EVENT_PRESSED) {
-        ESP_LOGI("LATENCY_AUDIT", "[LATENCY] Button Press: %lld ms", esp_timer_get_time() / 1000);
-        MIC_StartRecordingManual();
+        press_start_time = lv_tick_get();
+        is_screen_pressed = true;
+        dev_mode_toggle_triggered = false;
         idle_time = 0;
-        uint32_t now = lv_tick_get();
-        if (now - last_tap_time < 600) tap_count++;
-        else tap_count = 1;
-        last_tap_time = now;
 
-        if (tap_count >= 3) { 
-            set_eyes_state(EYE_STATE_ANGRY);
-        } else if (tap_count == 2) {
-            if (current_state == EYE_STATE_CRY || current_state == EYE_STATE_CRYING_MOUTH) {
-                set_eyes_state(EYE_STATE_HAPPY_CRY); // Comforted
+        if (!s_developer_mode) {
+            ESP_LOGI("LATENCY_AUDIT", "[LATENCY] Button Press: %lld ms", esp_timer_get_time() / 1000);
+            MIC_StartRecordingManual();
+            uint32_t now = lv_tick_get();
+            if (now - last_tap_time < 600) tap_count++;
+            else tap_count = 1;
+            last_tap_time = now;
+
+            if (tap_count >= 3) { 
+                set_eyes_state(EYE_STATE_ANGRY);
+            } else if (tap_count == 2) {
+                if (current_state == EYE_STATE_CRY || current_state == EYE_STATE_CRYING_MOUTH) {
+                    set_eyes_state(EYE_STATE_HAPPY_CRY); // Comforted
+                }
+                else if (current_state == EYE_STATE_NORMAL || current_state == EYE_STATE_HAPPY || current_state == EYE_STATE_CHILL) {
+                    set_eyes_state(EYE_STATE_LAUGH); // Tickled to laughter
+                }
+                else {
+                    set_eyes_state(EYE_STATE_INTEREST);
+                }
+            } else if (tap_count == 1) {
+                if (current_state == EYE_STATE_BORED || current_state == EYE_STATE_SLEEP || current_state == EYE_STATE_EYES_CLOSED) {
+                    set_eyes_state(EYE_STATE_CHILL); // Wake up groggy/stretching
+                }
+                else if (current_state == EYE_STATE_HAPPY || current_state == EYE_STATE_CHILL || current_state == EYE_STATE_INTEREST) {
+                    set_eyes_state(EYE_STATE_LAUGH); // Pet again to laugh
+                }
+                else if (current_state == EYE_STATE_ANGRY) {
+                    set_eyes_state(EYE_STATE_WTF); // Stunned/shocked
+                }
+                else if (current_state != EYE_STATE_BOOT && current_state != EYE_STATE_CRY && current_state != EYE_STATE_CRYING_MOUTH) {
+                    set_eyes_state(EYE_STATE_HAPPY);
+                }
             }
-            else if (current_state == EYE_STATE_NORMAL || current_state == EYE_STATE_HAPPY || current_state == EYE_STATE_CHILL) {
-                set_eyes_state(EYE_STATE_LAUGH); // Tickled to laughter
+        }
+    }
+    else if (code == LV_EVENT_PRESSING) {
+        if (is_screen_pressed && !dev_mode_toggle_triggered) {
+            uint32_t press_duration = lv_tick_get() - press_start_time;
+            if (press_duration >= 5000) { // 5 seconds
+                s_developer_mode = !s_developer_mode;
+                dev_mode_toggle_triggered = true;
+                
+                if (s_developer_mode) {
+                    if (FACE_PREVIEW_MODE) {
+                        s_preview_face_index = 0;
+                        s_preview_timer = 0;
+                        set_eyes_state(REGISTERED_FACES[0].state);
+                    } else {
+                        set_eyes_state(EYE_STATE_NORMAL);
+                    }
+                } else {
+                    update_name_label(""); // Remove labels on exit
+                    set_eyes_state(EYE_STATE_NORMAL);
+                }
             }
-            else {
-                set_eyes_state(EYE_STATE_INTEREST);
-            }
-        } else if (tap_count == 1) {
-            if (current_state == EYE_STATE_BORED || current_state == EYE_STATE_SLEEP || current_state == EYE_STATE_EYES_CLOSED) {
-                set_eyes_state(EYE_STATE_CHILL); // Wake up groggy/stretching
-            }
-            else if (current_state == EYE_STATE_HAPPY || current_state == EYE_STATE_CHILL || current_state == EYE_STATE_INTEREST) {
-                set_eyes_state(EYE_STATE_LAUGH); // Pet again to laugh
-            }
-            else if (current_state == EYE_STATE_ANGRY) {
-                set_eyes_state(EYE_STATE_WTF); // Stunned/shocked
-            }
-            else if (current_state != EYE_STATE_BOOT && current_state != EYE_STATE_CRY && current_state != EYE_STATE_CRYING_MOUTH) {
-                set_eyes_state(EYE_STATE_HAPPY);
+        }
+    }
+    else if (code == LV_EVENT_RELEASED) {
+        is_screen_pressed = false;
+        if (dev_mode_toggle_triggered) {
+            return;
+        }
+
+        if (s_developer_mode) {
+            uint32_t press_duration = lv_tick_get() - press_start_time;
+            if (press_duration < 1000) { // Tap
+                if (FACE_PREVIEW_MODE) {
+                    s_preview_face_index = (s_preview_face_index + 1) % NUM_REGISTERED_FACES;
+                    s_preview_timer = 0; // Reset preview timer
+                    set_eyes_state(REGISTERED_FACES[s_preview_face_index].state);
+                } else {
+                    eye_state_t next_state = current_state + 1;
+                    if (next_state >= EYE_STATE_MAX) {
+                        next_state = EYE_STATE_NORMAL;
+                    }
+                    set_eyes_state(next_state);
+                }
             }
         }
     }
@@ -733,6 +931,10 @@ void Deskimon_Start(void)
     }
     s_eye_color_pending = true;
 
+    if (FACE_PREVIEW_MODE) {
+        s_developer_mode = true;
+    }
+
     lv_obj_t * scr = lv_scr_act();
     lv_obj_add_event_cb(scr, screen_event_cb, LV_EVENT_ALL, NULL);
     lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
@@ -766,7 +968,7 @@ void Deskimon_Start(void)
     lv_obj_remove_style_all(insecure_eye_l);
     lv_obj_set_size(insecure_eye_l, 110, 110);
     lv_obj_set_style_radius(insecure_eye_l, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(insecure_eye_l, lv_color_hex(0xFF0000), 0);
+    lv_obj_set_style_bg_color(insecure_eye_l, lv_color_hex(0x00FFFF), 0);
     lv_obj_set_style_bg_opa(insecure_eye_l, LV_OPA_COVER, 0);
     lv_obj_align(insecure_eye_l, LV_ALIGN_CENTER, -65, -20);
     lv_obj_add_event_cb(insecure_eye_l, eye_mask_event_cb, LV_EVENT_ALL, (void*)1);
@@ -776,7 +978,7 @@ void Deskimon_Start(void)
     lv_obj_remove_style_all(insecure_eye_r);
     lv_obj_set_size(insecure_eye_r, 110, 110);
     lv_obj_set_style_radius(insecure_eye_r, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(insecure_eye_r, lv_color_hex(0xFF0000), 0);
+    lv_obj_set_style_bg_color(insecure_eye_r, lv_color_hex(0x00FFFF), 0);
     lv_obj_set_style_bg_opa(insecure_eye_r, LV_OPA_COVER, 0);
     lv_obj_align(insecure_eye_r, LV_ALIGN_CENTER, 65, -20);
     lv_obj_add_event_cb(insecure_eye_r, eye_mask_event_cb, LV_EVENT_ALL, (void*)2);
@@ -974,7 +1176,7 @@ void Deskimon_Start(void)
     lv_obj_remove_style_all(insecure_mouth); // Remove all default LVGL theme bleeds/outlines
     lv_obj_set_size(insecure_mouth, 40, 40); // Increased size
     lv_obj_set_style_radius(insecure_mouth, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(insecure_mouth, lv_color_hex(0xFF0000), 0);
+    lv_obj_set_style_bg_color(insecure_mouth, lv_color_hex(0x00FFFF), 0);
     lv_obj_set_style_bg_opa(insecure_mouth, LV_OPA_COVER, 0);
     lv_obj_align(insecure_mouth, LV_ALIGN_CENTER, 0, 60);
     lv_obj_set_style_opa(insecure_mouth, 0, 0);

@@ -186,6 +186,7 @@ body {
     left: 0;
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     transform-origin: center center;
+    overflow: hidden; /* Mask eyelids */
     
     /* Complex multiple shadows layers to achieve 3D inset/bevel pill look */
     box-shadow: 
@@ -196,32 +197,475 @@ body {
         0 0 35px var(--eye-glow);                      /* Outer glow effect onto screen background */
 }
 
+/* Eyelids inside the capsule */
+.eyelid.top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 150px;
+    background-color: #000000;
+    transform: translateY(-150px);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    z-index: 5;
+    pointer-events: none;
+}
+
+.eyelid.moon {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 150px;
+    height: 165px;
+    border-radius: 50%;
+    background-color: #000000;
+    transform: translate(-50%, 165px);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    z-index: 5;
+    pointer-events: none;
+}
+
+/* Tears streaming down */
+.tear {
+    position: absolute;
+    top: 150px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 35px;
+    height: 0;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    border-radius: 0 0 17px 17px;
+    opacity: 0;
+    transition: height 0.3s ease, opacity 0.3s ease;
+    z-index: 3;
+    pointer-events: none;
+}
+
+/* Dedicated eye overlays (hide base eyes when active) */
+.eye-insecure {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 25px var(--eye-glow);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 4;
+}
+
+/* Left eye diagonal cut: top part visible, bottom part cut by 20 deg line */
+.eye-wrapper.left .eye-insecure {
+    clip-path: polygon(0 0, 100% 0, 100% 40%, 0 75%);
+}
+
+/* Right eye diagonal cut: top part visible, bottom part cut by 160 deg line */
+.eye-wrapper.right .eye-insecure {
+    clip-path: polygon(0 0, 100% 0, 100% 75%, 0 40%);
+}
+
+.eye-insecure::after {
+    content: '';
+    position: absolute;
+    height: 15px;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    border-radius: 7.5px;
+    width: 120%;
+    left: -10%;
+}
+.eye-wrapper.left .eye-insecure::after {
+    bottom: 25%;
+    transform: rotate(20deg);
+}
+.eye-wrapper.right .eye-insecure::after {
+    bottom: 25%;
+    transform: rotate(-20deg);
+}
+
+/* Closed eyes chevron lines > and < */
+.eye-closed {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    width: 80px;
+    height: 100px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 4;
+}
+
+/* Left closed eye is > shape */
+.eye-wrapper.left .eye-closed::before,
+.eye-wrapper.left .eye-closed::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    width: 80px;
+    height: 14px;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    border-radius: 7px;
+}
+.eye-wrapper.left .eye-closed::before {
+    top: 25px;
+    transform: rotate(32deg);
+    transform-origin: left center;
+}
+.eye-wrapper.left .eye-closed::after {
+    bottom: 25px;
+    transform: rotate(-32deg);
+    transform-origin: left center;
+}
+
+/* Right closed eye is < shape */
+.eye-wrapper.right .eye-closed::before,
+.eye-wrapper.right .eye-closed::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    width: 80px;
+    height: 14px;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    border-radius: 7px;
+}
+.eye-wrapper.right .eye-closed::before {
+    top: 25px;
+    transform: rotate(-32deg);
+    transform-origin: right center;
+}
+.eye-wrapper.right .eye-closed::after {
+    bottom: 25px;
+    transform: rotate(32deg);
+    transform-origin: right center;
+}
+
+/* Ignore lines & hemispheres */
+.ignore-line {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    width: 120px;
+    height: 20px;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    border-radius: 10px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 4;
+}
+
+.ignore-hemi {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    width: 60px;
+    height: 30px;
+    border-radius: 0 0 30px 30px; /* bottom semicircle */
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 4;
+}
+.eye-wrapper.left .ignore-hemi {
+    transform: translate(-90px, 15px) scale(0);
+}
+.eye-wrapper.right .ignore-hemi {
+    transform: translate(30px, 15px) scale(0);
+}
+
+/* Laugh hemispheres */
+.laugh-hemi {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    width: 30px;
+    height: 15px;
+    border-radius: 0 0 15px 15px;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    z-index: 4;
+}
+
+/* Mouth Elements container */
+.mouth-container {
+    position: absolute;
+    bottom: 45px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 160px;
+    height: 80px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    z-index: 3;
+}
+
+/* Blush / Chill smile arcs */
+.mouth-arc {
+    position: absolute;
+    width: 40px;
+    height: 20px;
+    border: 8px solid var(--eye-color);
+    border-top: none;
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.mouth-arc.left {
+    left: 15px;
+}
+.mouth-arc.right {
+    right: 15px;
+}
+
+/* Interest smile arcs */
+.mouth-interest {
+    position: absolute;
+    width: 50px;
+    height: 25px;
+    border: 10px solid var(--eye-color);
+    border-top: none;
+    border-radius: 0 0 25px 25px;
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.mouth-interest.left {
+    left: 10px;
+}
+.mouth-interest.right {
+    right: 10px;
+}
+
+/* Ooh mouth (circle) */
+.mouth-ooh {
+    position: absolute;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    border: 8px solid var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.3s ease, transform 0.3s ease, width 0.3s ease, height 0.3s ease;
+}
+
+/* WTF mouth (triangle) */
+.mouth-wtf {
+    position: absolute;
+    width: 40px;
+    height: 30px;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.3s ease, transform 0.3s ease, width 0.3s ease, height 0.3s ease;
+}
+
+.mouth-wtf-circle {
+    position: absolute;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.3s ease, transform 0.3s ease, width 0.3s ease, height 0.3s ease;
+}
+
+/* Yawn mouth (oval) */
+.mouth-yawn {
+    position: absolute;
+    width: 50px;
+    height: 70px;
+    border-radius: 25px;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Insecure mouth (red circle) */
+.mouth-insecure {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #FF0000;
+    box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Happy cry mouth (triangle) */
+.mouth-triangle {
+    position: absolute;
+    width: 50px;
+    height: 30px;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Laugh mouth (capsule with vertical lines) */
+.mouth-laugh {
+    position: absolute;
+    width: 140px;
+    height: 70px;
+    border-radius: 35px;
+    background-color: var(--eye-color);
+    box-shadow: 0 0 15px var(--eye-glow);
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.3s ease, transform 0.3s ease, height 0.3s ease;
+    overflow: hidden;
+}
+
+.tooth-gap {
+    position: absolute;
+    top: 0;
+    width: 5px;
+    height: 80px;
+    background-color: #000000;
+}
+
 /* Active eye states / emotions */
 .eye.happy {
-    border-radius: 50.5px 50.5px 15px 15px;
-    transform: scaleY(0.7) translateY(20px);
+    /* Base eyes are happy */
 }
 
 .eye.angry {
-    transform: rotate(15deg);
-}
-.eye-wrapper.right .eye.angry {
-    transform: rotate(-15deg);
+    /* Angry is handled via color change to RED and size/translate adjustments */
 }
 
 .eye.sad {
-    transform: rotate(-12deg);
-}
-.eye-wrapper.right .eye.sad {
-    transform: rotate(12deg);
+    /* Sad is handled via angle/translate adjustments */
 }
 
 .eye.sleepy {
-    transform: scaleY(0.3) translateY(50px);
+    /* Sleepy is handled via squash/translate adjustments */
 }
 
 .eye.surprised {
-    transform: scale(1.22);
+    /* Surprised is handled via scale adjustments */
+}
+
+/* Animation Keyframes */
+@keyframes eyeJitter {
+    0%, 100% { transform: translate(-50%, -50%) translate(0, 0); }
+    20% { transform: translate(-50%, -50%) translate(-5px, 2px); }
+    40% { transform: translate(-50%, -50%) translate(4px, -3px); }
+    60% { transform: translate(-50%, -50%) translate(-2px, -4px); }
+    80% { transform: translate(-50%, -50%) translate(5px, 1px); }
+}
+
+@keyframes eyesClosedShake {
+    0%, 100% { transform: translate(-50%, -50%) translate(0, 0); }
+    20% { transform: translate(-50%, -50%) translate(-6px, -3px); }
+    40% { transform: translate(-50%, -50%) translate(5px, 4px); }
+    60% { transform: translate(-50%, -50%) translate(-4px, 2px); }
+    80% { transform: translate(-50%, -50%) translate(3px, -5px); }
+}
+
+@keyframes laughBob {
+    0%, 100% { transform: scale(1) translateY(0); }
+    50% { transform: scale(1) translateY(-6px); }
+}
+
+@keyframes laughMouthBob {
+    0%, 100% { transform: scale(1) translateY(0); height: 70px; }
+    50% { transform: scale(1) translateY(4px); height: 50px; }
+}
+
+@keyframes ignoreBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(6px); }
+}
+
+@keyframes ignoreHemiBobL {
+    0%, 100% { transform: translate(-90px, 15px) scale(1) translateY(0); }
+    50% { transform: translate(-90px, 15px) scale(1) translateY(6px); }
+}
+@keyframes ignoreHemiBobR {
+    0%, 100% { transform: translate(30px, 15px) scale(1) translateY(0); }
+    50% { transform: translate(30px, 15px) scale(1) translateY(6px); }
+}
+
+@keyframes tearDripL {
+    0% { height: 0; opacity: 0; transform: translateX(-50%) translateY(0); }
+    10% { height: 40px; opacity: 1; transform: translateX(-50%) translateY(0); }
+    80% { height: 80px; opacity: 1; transform: translateX(-50%) translateY(40px); }
+    100% { height: 80px; opacity: 0; transform: translateX(-50%) translateY(40px); }
+}
+@keyframes tearDripR {
+    0% { height: 0; opacity: 0; transform: translateX(-50%) translateY(0); }
+    10% { height: 40px; opacity: 1; transform: translateX(-50%) translateY(0); }
+    80% { height: 80px; opacity: 1; transform: translateX(-50%) translateY(40px); }
+    100% { height: 80px; opacity: 0; transform: translateX(-50%) translateY(40px); }
+}
+
+/* Animation Classes */
+.jittering {
+    animation: eyeJitter 0.5s infinite linear;
+}
+
+.shaking {
+    animation: eyesClosedShake 0.15s infinite linear;
+}
+
+.bobbing-laugh {
+    animation: laughBob 0.3s infinite ease-in-out;
+}
+
+.bobbing-laugh-mouth {
+    animation: laughMouthBob 0.3s infinite ease-in-out;
+}
+
+.bobbing-ignore {
+    animation: ignoreBob 0.6s infinite ease-in-out;
+}
+
+.bobbing-ignore-hemi-l {
+    animation: ignoreHemiBobL 0.6s infinite ease-in-out;
+}
+.bobbing-ignore-hemi-r {
+    animation: ignoreHemiBobR 0.6s infinite ease-in-out;
+}
+
+.tear-dripping-l {
+    animation: tearDripL 1.2s infinite ease-in-out;
+}
+.tear-dripping-r {
+    animation: tearDripR 1.2s infinite ease-in-out;
 }
 
 /* Device Bezel Accent Detail */
@@ -526,4 +970,30 @@ input[type="checkbox"]:checked::before {
         gap: 30px;
         padding: 24px;
     }
+}
+
+/* Developer Mode Overlay Label */
+.dev-mode-label {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 20, 20, 0.85);
+    border: 1.5px solid rgba(24, 215, 232, 0.4);
+    box-shadow: 0 0 10px rgba(24, 215, 232, 0.2);
+    color: #ffffff;
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 8px;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+.dev-mode-label.active {
+    opacity: 1;
 }

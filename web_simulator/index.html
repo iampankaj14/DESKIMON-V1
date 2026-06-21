@@ -28,15 +28,55 @@
         <!-- Section 1: Device Viewport containing the Interactive Eyes -->
         <section class="device-column">
             <div class="device-frame" id="deviceFrame">
-                <div class="device-screen">
+                <div class="device-screen" id="deviceScreen">
+                    <div class="dev-mode-label" id="devModeLabel">DEV: NEUTRAL</div>
                     <div class="eye-container" id="eyeContainer">
-                        <!-- Left Eye Capsule -->
+                        <!-- Left Eye Wrapper -->
                         <div class="eye-wrapper left">
-                            <div class="eye capsule" id="eyeLeft"></div>
+                            <div class="eye capsule" id="eyeLeft">
+                                <div class="eyelid top" id="eyelidLeftTop"></div>
+                                <div class="eyelid moon" id="eyelidLeftMoon"></div>
+                            </div>
+                            <div class="tear" id="tearLeft"></div>
+                            <div class="eye-insecure" id="eyeLeftInsecure"></div>
+                            <div class="eye-closed" id="eyeClosedLeft"></div>
+                            <div class="ignore-line" id="ignoreLineLeft"></div>
+                            <div class="ignore-hemi" id="ignoreHemiLeft"></div>
+                            <div class="laugh-hemi" id="laughHemiLeft"></div>
                         </div>
-                        <!-- Right Eye Capsule -->
+                        
+                        <!-- Right Eye Wrapper -->
                         <div class="eye-wrapper right">
-                            <div class="eye capsule" id="eyeRight"></div>
+                            <div class="eye capsule" id="eyeRight">
+                                <div class="eyelid top" id="eyelidRightTop"></div>
+                                <div class="eyelid moon" id="eyelidRightMoon"></div>
+                            </div>
+                            <div class="tear" id="tearRight"></div>
+                            <div class="eye-insecure" id="eyeRightInsecure"></div>
+                            <div class="eye-closed" id="eyeClosedRight"></div>
+                            <div class="ignore-line" id="ignoreLineRight"></div>
+                            <div class="ignore-hemi" id="ignoreHemiRight"></div>
+                            <div class="laugh-hemi" id="laughHemiRight"></div>
+                        </div>
+
+                        <!-- Mouth Container (all variants positioned relative to container) -->
+                        <div class="mouth-container" id="mouthContainer">
+                            <div class="mouth-arc left" id="mouthArcLeft"></div>
+                            <div class="mouth-arc right" id="mouthArcRight"></div>
+                            <div class="mouth-interest left" id="mouthInterestLeft"></div>
+                            <div class="mouth-interest right" id="mouthInterestRight"></div>
+                            <div class="mouth-yawn" id="mouthYawn"></div>
+                            <div class="mouth-triangle" id="mouthTriangle"></div>
+                            <div class="mouth-insecure" id="mouthInsecure"></div>
+                            <div class="mouth-ooh" id="mouthOoh"></div>
+                            <div class="mouth-wtf" id="mouthWtf"></div>
+                            <div class="mouth-wtf-circle" id="mouthWtfCircle"></div>
+                            <div class="mouth-laugh" id="mouthLaugh">
+                                <div class="tooth-gap" style="left: 24px;"></div>
+                                <div class="tooth-gap" style="left: 52px;"></div>
+                                <div class="tooth-gap" style="left: 80px;"></div>
+                                <div class="tooth-gap" style="left: 108px;"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -68,8 +108,29 @@
                     <button class="expr-btn" id="btnSleepy" onclick="setExpression('sleepy')">
                         <span class="btn-icon">😴</span> Sleepy
                     </button>
-                    <button class="expr-btn" id="btnSurprised" onclick="setExpression('surprised')">
-                        <span class="btn-icon">😲</span> Surprised
+                    <button class="expr-btn" id="btnCry" onclick="setExpression('cry')">
+                        <span class="btn-icon">😭</span> Cry
+                    </button>
+                    <button class="expr-btn" id="btnInterest" onclick="setExpression('interest')">
+                        <span class="btn-icon">👀</span> Interest
+                    </button>
+                    <button class="expr-btn" id="btnOoh" onclick="setExpression('ooh')">
+                        <span class="btn-icon">😮</span> Ooh
+                    </button>
+                    <button class="expr-btn" id="btnWtf" onclick="setExpression('wtf')">
+                        <span class="btn-icon">😱</span> WTF
+                    </button>
+                    <button class="expr-btn" id="btnLaugh" onclick="setExpression('laugh')">
+                        <span class="btn-icon">😂</span> Laugh
+                    </button>
+                    <button class="expr-btn" id="btnBored" onclick="setExpression('bored')">
+                        <span class="btn-icon">🥱</span> Bored
+                    </button>
+                    <button class="expr-btn" id="btnBlush" onclick="setExpression('blush')">
+                        <span class="btn-icon">☺️</span> Blush
+                    </button>
+                    <button class="expr-btn" id="btnChill" onclick="setExpression('chill')">
+                        <span class="btn-icon">😎</span> Chill
                     </button>
                 </div>
             </div>
