@@ -62,7 +62,7 @@ static int s_preview_face_index = 0;
 static uint32_t s_preview_timer = 0;
 static lv_obj_t * preview_label = NULL;
 
-static uint32_t s_eye_color_hex = 0x00FFFF;
+static uint32_t s_eye_color_hex = 0x1AC8DB;
 static volatile bool s_eye_color_pending = false;
 static volatile eye_state_t s_pending_eye_state = EYE_STATE_MAX;
 static volatile bool s_eye_state_pending = false;
@@ -76,10 +76,17 @@ static lv_obj_t * dev_mode_label = NULL;
 // UI Objects
 static lv_obj_t * eye_l;
 static lv_obj_t * eye_r;
+static lv_obj_t * eye_aura_l;
+static lv_obj_t * eye_aura_r;
+static lv_obj_t * insecure_eye_aura_l;
+static lv_obj_t * insecure_eye_aura_r;
+static lv_obj_t * ec_l;
+static lv_obj_t * ec_r;
 static lv_obj_t * mask_moon_l;
 static lv_obj_t * mask_moon_r;
 static lv_obj_t * mask_top_l;
 static lv_obj_t * mask_top_r;
+
 
 // Phase 1 & 2 UI Objects
 static lv_obj_t * mouth_arc_l;
@@ -231,6 +238,20 @@ static void animate_eye_base(lv_obj_t * eye, int32_t w, int32_t h, int32_t angle
     anim_prop(eye, set_angle_cb, lv_obj_get_style_transform_angle(eye, 0), angle, time);
     anim_prop(eye, set_tx_cb, lv_obj_get_style_translate_x(eye, 0), tx, time);
     anim_prop(eye, set_ty_cb, lv_obj_get_style_translate_y(eye, 0), ty, time);
+
+    lv_obj_t * aura = NULL;
+    if (eye == eye_l) aura = eye_aura_l;
+    else if (eye == eye_r) aura = eye_aura_r;
+
+    if (aura != NULL) {
+        int32_t aura_w = (w * 11) / 10;
+        int32_t aura_h = (h * 11) / 10;
+        anim_prop(aura, set_width_cb, lv_obj_get_width(aura), aura_w, time);
+        anim_prop(aura, set_height_cb, lv_obj_get_height(aura), aura_h, time);
+        anim_prop(aura, set_angle_cb, lv_obj_get_style_transform_angle(aura, 0), angle, time);
+        anim_prop(aura, set_tx_cb, lv_obj_get_style_translate_x(aura, 0), tx, time);
+        anim_prop(aura, set_ty_cb, lv_obj_get_style_translate_y(aura, 0), ty, time);
+    }
 }
 
 static void hide_masks(uint32_t time) {
@@ -247,6 +268,14 @@ static void fade_obj(lv_obj_t * obj, bool show, uint32_t time) {
     if(start != end) anim_prop(obj, set_opa_cb, start, end, time);
 }
 
+static void fade_aura(lv_obj_t * obj, bool show, uint32_t time) {
+    if (!obj) return;
+    lv_anim_del(obj, set_opa_cb);
+    int32_t start = lv_obj_get_style_opa(obj, 0);
+    int32_t end = show ? LV_OPA_20 : 0;
+    if(start != end) anim_prop(obj, set_opa_cb, start, end, time);
+}
+
 static void hide_all_accessories(uint32_t time) {
     fade_obj(mouth_arc_l, false, time);
     fade_obj(mouth_arc_r, false, time);
@@ -260,6 +289,8 @@ static void hide_all_accessories(uint32_t time) {
     fade_obj(insecure_mouth, false, time);
     fade_obj(insecure_eye_l, false, time);
     fade_obj(insecure_eye_r, false, time);
+    fade_aura(insecure_eye_aura_l, false, time);
+    fade_aura(insecure_eye_aura_r, false, time);
     fade_obj(mouth_ooh, false, time);
     fade_obj(mouth_wtf, false, time);
     fade_obj(mouth_wtf_circle, false, time);
@@ -356,22 +387,25 @@ static void set_eyes_state(eye_state_t new_state) {
     if (current_state == EYE_STATE_IGNORE) {
         fade_obj(eye_l, true, 300);
         fade_obj(eye_r, true, 300);
+        fade_aura(eye_aura_l, true, 300);
+        fade_aura(eye_aura_r, true, 300);
     }
     
     current_state = new_state;
     state_time = 0;
-    
-    lv_obj_set_style_bg_color(eye_l, lv_color_hex(s_eye_color_hex), 0);
-    lv_obj_set_style_bg_color(eye_r, lv_color_hex(s_eye_color_hex), 0);
     
     // Hide base eyes ONLY if we are switching to dedicated eyes
     if (new_state == EYE_STATE_INSECURE || new_state == EYE_STATE_INTEREST || 
         new_state == EYE_STATE_IGNORE || new_state == EYE_STATE_EYES_CLOSED) {
         fade_obj(eye_l, false, 300);
         fade_obj(eye_r, false, 300);
+        fade_aura(eye_aura_l, false, 300);
+        fade_aura(eye_aura_r, false, 300);
     } else {
         fade_obj(eye_l, true, 300);
         fade_obj(eye_r, true, 300);
+        fade_aura(eye_aura_l, true, 300);
+        fade_aura(eye_aura_r, true, 300);
     }
     
     hide_masks(300);
@@ -403,8 +437,6 @@ static void set_eyes_state(eye_state_t new_state) {
             
         case EYE_STATE_ANGRY:
             update_name_label("ANGRY");
-            lv_obj_set_style_bg_color(eye_l, lv_color_hex(0xFF0000), 0);
-            lv_obj_set_style_bg_color(eye_r, lv_color_hex(0xFF0000), 0);
             animate_eye_base(eye_l, 130, 180, 0, -15, -40, 300); 
             animate_eye_base(eye_r, 130, 180, 0, 15, -40, 300);
             anim_prop(mask_top_l, set_ty_cb, lv_obj_get_style_translate_y(mask_top_l, 0), -40, 300);
@@ -413,8 +445,6 @@ static void set_eyes_state(eye_state_t new_state) {
             
         case EYE_STATE_SLEEP:
             update_name_label("SLEEP");
-            lv_obj_set_style_bg_color(eye_l, lv_color_hex(0x005555), 0);
-            lv_obj_set_style_bg_color(eye_r, lv_color_hex(0x005555), 0);
             animate_eye_base(eye_l, 90, 25, 0, 0, 40, 800); 
             animate_eye_base(eye_r, 90, 25, 0, 0, 40, 800);
             break;
@@ -508,8 +538,12 @@ static void set_eyes_state(eye_state_t new_state) {
             update_name_label("INSECURE");
             fade_obj(eye_l, false, 300); // Fix for intersecting base eyes
             fade_obj(eye_r, false, 300);
+            fade_aura(eye_aura_l, false, 300);
+            fade_aura(eye_aura_r, false, 300);
             fade_obj(insecure_eye_l, true, 300);
             fade_obj(insecure_eye_r, true, 300);
+            fade_aura(insecure_eye_aura_l, true, 300);
+            fade_aura(insecure_eye_aura_r, true, 300);
             fade_obj(insecure_mouth, true, 300);
             fade_obj(insec_cover_l, true, 300);
             fade_obj(insec_cover_r, true, 300);
@@ -519,8 +553,12 @@ static void set_eyes_state(eye_state_t new_state) {
             update_name_label("INTEREST");
             fade_obj(eye_l, false, 300); // Fix for intersecting base eyes
             fade_obj(eye_r, false, 300);
+            fade_aura(eye_aura_l, false, 300);
+            fade_aura(eye_aura_r, false, 300);
             fade_obj(insecure_eye_l, true, 300); // Identical to INSECURE
             fade_obj(insecure_eye_r, true, 300); // Identical to INSECURE
+            fade_aura(insecure_eye_aura_l, true, 300);
+            fade_aura(insecure_eye_aura_r, true, 300);
             fade_obj(interest_mouth_l, true, 300);
             fade_obj(interest_mouth_r, true, 300);
             fade_obj(insec_cover_l, true, 300);
@@ -531,6 +569,8 @@ static void set_eyes_state(eye_state_t new_state) {
             update_name_label("OOH");
             lv_obj_set_size(eye_l, 70, 90); // Start smaller (surprise pop)
             lv_obj_set_size(eye_r, 70, 90);
+            lv_obj_set_size(eye_aura_l, 77, 99);
+            lv_obj_set_size(eye_aura_r, 77, 99);
             animate_eye_base(eye_l, 105, 130, 0, 0, -10, 500); // Expanding to big egg eyes
             animate_eye_base(eye_r, 105, 130, 0, 0, -10, 500);
             
@@ -546,6 +586,8 @@ static void set_eyes_state(eye_state_t new_state) {
             // Animate flat eyes expanding outward & positioned even higher (ty = -45)
             lv_obj_set_size(eye_l, 20, 16); // Start short dash
             lv_obj_set_size(eye_r, 20, 16);
+            lv_obj_set_size(eye_aura_l, 22, 17);
+            lv_obj_set_size(eye_aura_r, 22, 17);
             animate_eye_base(eye_l, 100, 16, 0, 0, -45, 500); // laser expand & lift higher
             animate_eye_base(eye_r, 100, 16, 0, 0, -45, 500);
             
@@ -594,8 +636,33 @@ static void logic_timer_cb(lv_timer_t * t)
     if (s_eye_color_pending) {
         s_eye_color_pending = false;
         lv_color_t color = lv_color_hex(s_eye_color_hex);
-        if (eye_l) lv_obj_set_style_bg_color(eye_l, color, 0);
-        if (eye_r) lv_obj_set_style_bg_color(eye_r, color, 0);
+        if (eye_l) {
+            lv_obj_set_style_border_color(eye_l, color, 0);
+            lv_obj_set_style_bg_grad_color(eye_l, color, 0);
+        }
+        if (eye_r) {
+            lv_obj_set_style_border_color(eye_r, color, 0);
+            lv_obj_set_style_bg_grad_color(eye_r, color, 0);
+        }
+        if (eye_aura_l) lv_obj_set_style_bg_color(eye_aura_l, color, 0);
+        if (eye_aura_r) lv_obj_set_style_bg_color(eye_aura_r, color, 0);
+        
+        if (insecure_eye_l) {
+            lv_obj_set_style_border_color(insecure_eye_l, color, 0);
+            lv_obj_set_style_bg_grad_color(insecure_eye_l, color, 0);
+        }
+        if (insecure_eye_r) {
+            lv_obj_set_style_border_color(insecure_eye_r, color, 0);
+            lv_obj_set_style_bg_grad_color(insecure_eye_r, color, 0);
+        }
+        if (insecure_eye_aura_l) lv_obj_set_style_bg_color(insecure_eye_aura_l, color, 0);
+        if (insecure_eye_aura_r) lv_obj_set_style_bg_color(insecure_eye_aura_r, color, 0);
+
+        if (ec_l) lv_obj_set_style_line_color(ec_l, color, 0);
+        if (ec_r) lv_obj_set_style_line_color(ec_r, color, 0);
+        if (insec_cover_l) lv_obj_set_style_line_color(insec_cover_l, color, 0);
+        if (insec_cover_r) lv_obj_set_style_line_color(insec_cover_r, color, 0);
+
         if (mouth_arc_l) lv_obj_set_style_arc_color(mouth_arc_l, color, LV_PART_MAIN);
         if (mouth_arc_r) lv_obj_set_style_arc_color(mouth_arc_r, color, LV_PART_MAIN);
         if (interest_mouth_l) lv_obj_set_style_arc_color(interest_mouth_l, color, LV_PART_MAIN);
@@ -611,8 +678,6 @@ static void logic_timer_cb(lv_timer_t * t)
         if (laugh_mouth) lv_obj_set_style_bg_color(laugh_mouth, color, 0);
         if (laugh_hemi_l) lv_obj_set_style_bg_color(laugh_hemi_l, color, 0);
         if (laugh_hemi_r) lv_obj_set_style_bg_color(laugh_hemi_r, color, 0);
-        if (insecure_eye_l) lv_obj_set_style_bg_color(insecure_eye_l, color, 0);
-        if (insecure_eye_r) lv_obj_set_style_bg_color(insecure_eye_r, color, 0);
         if (insecure_mouth) lv_obj_set_style_bg_color(insecure_mouth, color, 0);
     }
 
@@ -641,15 +706,19 @@ static void logic_timer_cb(lv_timer_t * t)
             int offset = (rand() % 30) - 15;
             if (current_state == EYE_STATE_INSECURE) {
                 anim_prop(insecure_eye_l, set_tx_cb, lv_obj_get_style_translate_x(insecure_eye_l, 0), offset, 300);
+                anim_prop(insecure_eye_aura_l, set_tx_cb, lv_obj_get_style_translate_x(insecure_eye_aura_l, 0), offset, 300);
                 anim_prop(insec_cover_l, set_tx_cb, lv_obj_get_style_translate_x(insec_cover_l, 0), offset, 300);
                 anim_prop(insecure_eye_r, set_tx_cb, lv_obj_get_style_translate_x(insecure_eye_r, 0), offset, 300);
+                anim_prop(insecure_eye_aura_r, set_tx_cb, lv_obj_get_style_translate_x(insecure_eye_aura_r, 0), offset, 300);
                 anim_prop(insec_cover_r, set_tx_cb, lv_obj_get_style_translate_x(insec_cover_r, 0), offset, 300);
                 anim_prop(insecure_mouth, set_tx_cb, lv_obj_get_style_translate_x(insecure_mouth, 0), offset / 2, 300);
             } else if (current_state == EYE_STATE_INTEREST) {
                 // Jitter the eyes exactly like INSECURE
                 anim_prop(insecure_eye_l, set_tx_cb, lv_obj_get_style_translate_x(insecure_eye_l, 0), offset, 300);
+                anim_prop(insecure_eye_aura_l, set_tx_cb, lv_obj_get_style_translate_x(insecure_eye_aura_l, 0), offset, 300);
                 anim_prop(insec_cover_l, set_tx_cb, lv_obj_get_style_translate_x(insec_cover_l, 0), offset, 300);
                 anim_prop(insecure_eye_r, set_tx_cb, lv_obj_get_style_translate_x(insecure_eye_r, 0), offset, 300);
+                anim_prop(insecure_eye_aura_r, set_tx_cb, lv_obj_get_style_translate_x(insecure_eye_aura_r, 0), offset, 300);
                 anim_prop(insec_cover_r, set_tx_cb, lv_obj_get_style_translate_x(insec_cover_r, 0), offset, 300);
                 // Jitter the mouth
                 anim_prop(interest_mouth_l, set_tx_cb, lv_obj_get_style_translate_x(interest_mouth_l, 0), offset / 2, 300);
@@ -942,13 +1011,41 @@ void Deskimon_Start(void)
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
 
-    // BASE EYES
+    // BASE EYES AURA (Outer Aura - Layer 1)
+    eye_aura_l = lv_obj_create(scr);
+    lv_obj_set_size(eye_aura_l, 110, 181);
+    lv_obj_set_style_radius(eye_aura_l, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(eye_aura_l, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_bg_opa(eye_aura_l, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(eye_aura_l, 0, 0);
+    lv_obj_clear_flag(eye_aura_l, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(eye_aura_l, LV_ALIGN_CENTER, -60, 0);
+    lv_obj_set_style_opa(eye_aura_l, LV_OPA_20, 0); // 20% opacity
+
+    eye_aura_r = lv_obj_create(scr);
+    lv_obj_set_size(eye_aura_r, 110, 181);
+    lv_obj_set_style_radius(eye_aura_r, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(eye_aura_r, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_bg_opa(eye_aura_r, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(eye_aura_r, 0, 0);
+    lv_obj_clear_flag(eye_aura_r, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(eye_aura_r, LV_ALIGN_CENTER, 60, 0);
+    lv_obj_set_style_opa(eye_aura_r, LV_OPA_20, 0); // 20% opacity
+
+    // BASE EYES (Energy Core & Ring - Layers 3 & 2)
     eye_l = lv_obj_create(scr);
     lv_obj_set_size(eye_l, 100, 165);
     lv_obj_set_style_radius(eye_l, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(eye_l, lv_color_hex(0x00FFFF), 0); 
+    // Gradient Energy Core
+    lv_obj_set_style_bg_color(eye_l, lv_color_hex(0xFFFFFFFF), 0);
+    lv_obj_set_style_bg_grad_color(eye_l, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_bg_grad_dir(eye_l, LV_GRAD_DIR_VER, 0);
     lv_obj_set_style_bg_opa(eye_l, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(eye_l, 0, 0);
+    // Energy Ring Border
+    lv_obj_set_style_border_color(eye_l, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_border_width(eye_l, 6, 0);
+    lv_obj_set_style_border_opa(eye_l, LV_OPA_COVER, 0);
+    
     lv_obj_clear_flag(eye_l, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_align(eye_l, LV_ALIGN_CENTER, -60, 0);
     create_eye_masks(eye_l, &mask_top_l, &mask_moon_l);
@@ -956,20 +1053,56 @@ void Deskimon_Start(void)
     eye_r = lv_obj_create(scr);
     lv_obj_set_size(eye_r, 100, 165);
     lv_obj_set_style_radius(eye_r, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(eye_r, lv_color_hex(0x00FFFF), 0); 
+    // Gradient Energy Core
+    lv_obj_set_style_bg_color(eye_r, lv_color_hex(0xFFFFFFFF), 0);
+    lv_obj_set_style_bg_grad_color(eye_r, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_bg_grad_dir(eye_r, LV_GRAD_DIR_VER, 0);
     lv_obj_set_style_bg_opa(eye_r, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(eye_r, 0, 0);
+    // Energy Ring Border
+    lv_obj_set_style_border_color(eye_r, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_border_width(eye_r, 6, 0);
+    lv_obj_set_style_border_opa(eye_r, LV_OPA_COVER, 0);
+    
     lv_obj_clear_flag(eye_r, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_align(eye_r, LV_ALIGN_CENTER, 60, 0);
     create_eye_masks(eye_r, &mask_top_r, &mask_moon_r);
 
-    // DEDICATED INSECURE/INTEREST EYES (EXACT IMAGE DESIGN USING MASKS)
+    // DEDICATED INSECURE/INTEREST EYES AURA (Outer Aura - Layer 1)
+    insecure_eye_aura_l = lv_obj_create(scr);
+    lv_obj_remove_style_all(insecure_eye_aura_l);
+    lv_obj_set_size(insecure_eye_aura_l, 121, 121);
+    lv_obj_set_style_radius(insecure_eye_aura_l, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(insecure_eye_aura_l, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_bg_opa(insecure_eye_aura_l, LV_OPA_COVER, 0);
+    lv_obj_align(insecure_eye_aura_l, LV_ALIGN_CENTER, -65, -20);
+    lv_obj_add_event_cb(insecure_eye_aura_l, eye_mask_event_cb, LV_EVENT_ALL, (void*)1);
+    lv_obj_set_style_opa(insecure_eye_aura_l, 0, 0);
+
+    insecure_eye_aura_r = lv_obj_create(scr);
+    lv_obj_remove_style_all(insecure_eye_aura_r);
+    lv_obj_set_size(insecure_eye_aura_r, 121, 121);
+    lv_obj_set_style_radius(insecure_eye_aura_r, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(insecure_eye_aura_r, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_bg_opa(insecure_eye_aura_r, LV_OPA_COVER, 0);
+    lv_obj_align(insecure_eye_aura_r, LV_ALIGN_CENTER, 65, -20);
+    lv_obj_add_event_cb(insecure_eye_aura_r, eye_mask_event_cb, LV_EVENT_ALL, (void*)2);
+    lv_obj_set_style_opa(insecure_eye_aura_r, 0, 0);
+
+    // DEDICATED INSECURE/INTEREST EYES (Energy Core & Ring - Layers 3 & 2)
     insecure_eye_l = lv_obj_create(scr);
     lv_obj_remove_style_all(insecure_eye_l);
     lv_obj_set_size(insecure_eye_l, 110, 110);
     lv_obj_set_style_radius(insecure_eye_l, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(insecure_eye_l, lv_color_hex(0x00FFFF), 0);
+    // Gradient Energy Core
+    lv_obj_set_style_bg_color(insecure_eye_l, lv_color_hex(0xFFFFFFFF), 0);
+    lv_obj_set_style_bg_grad_color(insecure_eye_l, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_bg_grad_dir(insecure_eye_l, LV_GRAD_DIR_VER, 0);
     lv_obj_set_style_bg_opa(insecure_eye_l, LV_OPA_COVER, 0);
+    // Energy Ring Border
+    lv_obj_set_style_border_color(insecure_eye_l, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_border_width(insecure_eye_l, 6, 0);
+    lv_obj_set_style_border_opa(insecure_eye_l, LV_OPA_COVER, 0);
+    
     lv_obj_align(insecure_eye_l, LV_ALIGN_CENTER, -65, -20);
     lv_obj_add_event_cb(insecure_eye_l, eye_mask_event_cb, LV_EVENT_ALL, (void*)1);
     lv_obj_set_style_opa(insecure_eye_l, 0, 0);
@@ -978,8 +1111,16 @@ void Deskimon_Start(void)
     lv_obj_remove_style_all(insecure_eye_r);
     lv_obj_set_size(insecure_eye_r, 110, 110);
     lv_obj_set_style_radius(insecure_eye_r, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(insecure_eye_r, lv_color_hex(0x00FFFF), 0);
+    // Gradient Energy Core
+    lv_obj_set_style_bg_color(insecure_eye_r, lv_color_hex(0xFFFFFFFF), 0);
+    lv_obj_set_style_bg_grad_color(insecure_eye_r, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_bg_grad_dir(insecure_eye_r, LV_GRAD_DIR_VER, 0);
     lv_obj_set_style_bg_opa(insecure_eye_r, LV_OPA_COVER, 0);
+    // Energy Ring Border
+    lv_obj_set_style_border_color(insecure_eye_r, lv_color_hex(s_eye_color_hex), 0);
+    lv_obj_set_style_border_width(insecure_eye_r, 6, 0);
+    lv_obj_set_style_border_opa(insecure_eye_r, LV_OPA_COVER, 0);
+    
     lv_obj_align(insecure_eye_r, LV_ALIGN_CENTER, 65, -20);
     lv_obj_add_event_cb(insecure_eye_r, eye_mask_event_cb, LV_EVENT_ALL, (void*)2);
     lv_obj_set_style_opa(insecure_eye_r, 0, 0);
@@ -1083,11 +1224,11 @@ void Deskimon_Start(void)
     lv_obj_set_size(eye_closed_l, 80, 100);
     lv_obj_align(eye_closed_l, LV_ALIGN_CENTER, -60, 0);
 
-    lv_obj_t * ec_l = lv_line_create(eye_closed_l);
+    ec_l = lv_line_create(eye_closed_l);
     static lv_point_t l_pts[] = {{0,0}, {80,50}, {0,100}}; // 2 straight lines joined to form >
     lv_line_set_points(ec_l, l_pts, 3);
     lv_obj_set_style_line_width(ec_l, 14, 0);
-    lv_obj_set_style_line_color(ec_l, lv_color_hex(0x00FFFF), 0);
+    lv_obj_set_style_line_color(ec_l, lv_color_hex(s_eye_color_hex), 0);
     lv_obj_set_style_line_rounded(ec_l, true, 0);
     lv_obj_set_style_opa(eye_closed_l, 0, 0);
 
@@ -1096,11 +1237,11 @@ void Deskimon_Start(void)
     lv_obj_set_size(eye_closed_r, 80, 100);
     lv_obj_align(eye_closed_r, LV_ALIGN_CENTER, 60, 0);
 
-    lv_obj_t * ec_r = lv_line_create(eye_closed_r);
+    ec_r = lv_line_create(eye_closed_r);
     static lv_point_t r_pts[] = {{80,0}, {0,50}, {80,100}}; // 2 straight lines joined to form <
     lv_line_set_points(ec_r, r_pts, 3);
     lv_obj_set_style_line_width(ec_r, 14, 0);
-    lv_obj_set_style_line_color(ec_r, lv_color_hex(0x00FFFF), 0);
+    lv_obj_set_style_line_color(ec_r, lv_color_hex(s_eye_color_hex), 0);
     lv_obj_set_style_line_rounded(ec_r, true, 0);
     lv_obj_set_style_opa(eye_closed_r, 0, 0);
 
