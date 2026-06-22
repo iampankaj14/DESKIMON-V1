@@ -33,12 +33,6 @@ void example_lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t
     int offsety1 = area->y1;
     int offsety2 = area->y2;
 
-    // Fast in-place byte swapping of final rendered buffer
-    uint32_t size = (offsetx2 - offsetx1 + 1) * (offsety2 - offsety1 + 1);
-    for (uint32_t i = 0; i < size; i++) {
-        color_map[i].full = (color_map[i].full << 8) | (color_map[i].full >> 8);
-    }
-
     // copy a buffer's content to a specific area of the display
     esp_lcd_panel_draw_bitmap(panel_handle, offsetx1, offsety1, offsetx2 + 1, offsety2 + 1, color_map);
 }

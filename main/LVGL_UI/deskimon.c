@@ -244,6 +244,20 @@ static void eye_mask_event_cb(lv_event_t * e) {
     }
 }
 
+static void eye_container_event_cb(lv_event_t * e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_SIZE_CHANGED) {
+        lv_obj_t * container = lv_event_get_target(e);
+        lv_coord_t w = lv_obj_get_width(container);
+        lv_coord_t h = lv_obj_get_height(container);
+
+        lv_obj_t * aura = (container == eye_container_l) ? eye_aura_l : eye_aura_r;
+        if (aura) {
+            lv_obj_set_size(aura, w + 10, h + 10);
+        }
+    }
+}
+
 static void animate_eye_base(lv_obj_t * eye, int32_t w, int32_t h, int32_t angle, int32_t tx, int32_t ty, uint32_t time) {
     anim_prop(eye, set_width_cb, lv_obj_get_width(eye), w, time);
     anim_prop(eye, set_height_cb, lv_obj_get_height(eye), h, time);
@@ -411,8 +425,8 @@ static void set_eyes_state(eye_state_t new_state) {
             
         case EYE_STATE_BORED:
             update_name_label("BORED");
-            animate_eye_base(eye_container_l, 130, 180, 0, 0, -40, 500);
-            animate_eye_base(eye_container_r, 130, 180, 0, 0, -40, 500);
+            animate_eye_base(eye_container_l, 130, 180, 0, -15, -40, 500);
+            animate_eye_base(eye_container_r, 130, 180, 0, 15, -40, 500);
             anim_prop(mask_top_l, set_ty_cb, lv_obj_get_style_translate_y(mask_top_l, 0), -40, 500);
             anim_prop(mask_top_r, set_ty_cb, lv_obj_get_style_translate_y(mask_top_r, 0), -40, 500);
             break;
@@ -427,8 +441,8 @@ static void set_eyes_state(eye_state_t new_state) {
             
         case EYE_STATE_ANGRY:
             update_name_label("ANGRY");
-            animate_eye_base(eye_container_l, 130, 180, 0, 0, -40, 300); 
-            animate_eye_base(eye_container_r, 130, 180, 0, 0, -40, 300);
+            animate_eye_base(eye_container_l, 130, 180, 0, -15, -40, 300); 
+            animate_eye_base(eye_container_r, 130, 180, 0, 15, -40, 300);
             anim_prop(mask_top_l, set_ty_cb, lv_obj_get_style_translate_y(mask_top_l, 0), -40, 300);
             anim_prop(mask_top_r, set_ty_cb, lv_obj_get_style_translate_y(mask_top_r, 0), -40, 300);
             break;
@@ -627,10 +641,10 @@ static void logic_timer_cb(lv_timer_t * t)
         uint8_t aura_op = LV_OPA_20;
 #else
         lv_color_t color = lv_color_hex(s_eye_color_hex);
-        lv_color_t core_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0xFFFAF0) : lv_color_hex(0xF8FFFF);
-        lv_color_t mid_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x1AC8DB) : color;
-        lv_color_t border_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x1AC8DB) : color;
-        lv_color_t aura_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x1AC8DB) : color;
+        lv_color_t core_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0xFFFFFF) : lv_color_hex(0xF8FFFF);
+        lv_color_t mid_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x3BCBDE) : color;
+        lv_color_t border_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x49CFE0) : color;
+        lv_color_t aura_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x49CFE0) : color;
         uint16_t border_w = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? 5 : 6;
         uint8_t aura_op = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? 38 : LV_OPA_20;
 #endif
@@ -1099,10 +1113,10 @@ void Deskimon_Start(void)
     uint16_t border_w = 6;
     uint8_t aura_op = LV_OPA_20;
 #else
-    lv_color_t core_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0xFFFAF0) : lv_color_hex(0xF8FFFF);
-    lv_color_t mid_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x1AC8DB) : lv_color_hex(s_eye_color_hex);
-    lv_color_t init_border_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x1AC8DB) : lv_color_hex(s_eye_color_hex);
-    lv_color_t init_aura_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x1AC8DB) : lv_color_hex(s_eye_color_hex);
+    lv_color_t core_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0xFFFFFF) : lv_color_hex(0xF8FFFF);
+    lv_color_t mid_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x3BCBDE) : lv_color_hex(s_eye_color_hex);
+    lv_color_t init_border_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x49CFE0) : lv_color_hex(s_eye_color_hex);
+    lv_color_t init_aura_color = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? lv_color_hex(0x49CFE0) : lv_color_hex(s_eye_color_hex);
     uint16_t border_w = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? 5 : 6;
     uint8_t aura_op = (s_eye_color_hex == 0x1AC8DB || s_eye_color_hex == 0x00FFFF) ? 38 : LV_OPA_20;
 #endif
@@ -1130,7 +1144,7 @@ void Deskimon_Start(void)
     // BASE EYES AURA (Outer Aura - Layer 1, Child of container)
     eye_aura_l = lv_obj_create(eye_container_l);
     lv_obj_remove_style_all(eye_aura_l);
-    lv_obj_set_size(eye_aura_l, lv_pct(110), lv_pct(110));
+    lv_obj_set_size(eye_aura_l, 110, 175);
     lv_obj_set_style_radius(eye_aura_l, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(eye_aura_l, init_aura_color, 0);
     lv_obj_set_style_bg_opa(eye_aura_l, LV_OPA_COVER, 0);
@@ -1143,7 +1157,7 @@ void Deskimon_Start(void)
 
     eye_aura_r = lv_obj_create(eye_container_r);
     lv_obj_remove_style_all(eye_aura_r);
-    lv_obj_set_size(eye_aura_r, lv_pct(110), lv_pct(110));
+    lv_obj_set_size(eye_aura_r, 110, 175);
     lv_obj_set_style_radius(eye_aura_r, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(eye_aura_r, init_aura_color, 0);
     lv_obj_set_style_bg_opa(eye_aura_r, LV_OPA_COVER, 0);
@@ -1153,6 +1167,10 @@ void Deskimon_Start(void)
 #else
     lv_obj_set_style_opa(eye_aura_r, aura_op, 0);
 #endif
+
+    // Register size changed events on the containers to dynamically adjust aura size uniformly
+    lv_obj_add_event_cb(eye_container_l, eye_container_event_cb, LV_EVENT_SIZE_CHANGED, NULL);
+    lv_obj_add_event_cb(eye_container_r, eye_container_event_cb, LV_EVENT_SIZE_CHANGED, NULL);
 
     // BASE EYES (Energy Core & Ring - Layers 3 & 2, Child of container)
     eye_l = lv_obj_create(eye_container_l);
