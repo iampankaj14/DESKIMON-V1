@@ -1,3 +1,4 @@
 {
-    "idf.currentSetup": "/Users/pankaj/.espressif/v6.0.1/esp-idf"
+    "idf.currentSetup": "/Users/pankaj/.espressif/v6.0.1/esp-idf",
+    "cmake.sourceDirectory": "/Users/pankaj/Desktop/DESKIMON/SPARK-V1/firmware/components/espressif__esp-sr/model"
 }
