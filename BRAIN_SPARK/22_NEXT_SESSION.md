@@ -1,6 +1,6 @@
 # 22 — NEXT SESSION
 
-If development stopped today (2026-06-26), here is exactly what the next developer must do first.
+If development stopped today (2026-08-25), here is exactly what the next developer must do first.
 
 ---
 
@@ -9,41 +9,38 @@ If development stopped today (2026-06-26), here is exactly what the next develop
 - ✅ SparkCore architecture is complete and clean
 - ✅ Server pipeline is fully functional (STT → Intent → Gemini → TTS)
 - ✅ Personality, memory, and milestone systems are implemented
+- ✅ **Mic white noise fix applied** (2026-08-25): AFE SE enabled, gain boosted to 4x, DC filter removed from codec
 - ⚠️ Firmware is currently in **Face Dev Mode** (`SPARK_FACE_DEV_MODE 1`)
 - ⚠️ Several face enum values have no config and will crash if triggered
 - ⚠️ Emotion header (`X-Emotion`) from server to ESP32 is not yet implemented
 
 ---
 
-## Immediate Priority: Complete Hardware Validation
+## Immediate Priority: Build, Flash & Test Mic Fix
 
-### Step 1: Flash current firmware and run Face Dev Mode
-The firmware is compiled with `SPARK_FACE_DEV_MODE 1`. Flash it to the device and observe:
-- Does the display initialize correctly?
-- Do all configured faces render and transition without flickering or crashes?
-- Are tear objects, mouth elements, and mask overlays positioned correctly?
-- Does the `LAUGH` face show a wide open capsule mouth?
-- Does the `WTF` face show flat eyes and a triangle mouth?
-
-**What to expect:** `Deskimon_FaceDevMode_Start()` cycles through faces. Watch the display.
-
-**What to do if a face crashes:** Read `spark_face.c` to verify the config entry for that face. Check if the relevant `SPARK_UI_*` objects are created in `deskimon.c`.
-
----
-
-### Step 2: Disable Dev Mode and Run Full Production Build
-
-In `firmware/main/main.c`, **line 1**:
-```c
-#define SPARK_FACE_DEV_MODE 0    ← Change this
+### Step 0: Build and verify the mic fix compiles
+```bash
+cd /path/to/SPARK-V1/firmware
+idf.py build
 ```
 
-Recompile: `idf.py build`
-Flash: `idf.py -p /dev/cu.usbserial-XXX flash`
+### Step 1: Flash and test mic capture quality
+1. Set `SPARK_FACE_DEV_MODE 0` in `main.c` (mic testing needs full production boot)
+2. Flash: `idf.py -p <PORT> flash monitor`
+3. Watch serial output for the I2S hardware diagnostic at boot
+4. Speak near the mic and verify:
+   - The boot diagnostic shows non-zero, non-clipping 32-bit values
+   - AFE Feed() RMS values show clear signal above noise (~500+ RMS when speaking vs ~50-100 quiet)
+   - Voice reaches the server cleanly (test with `node server_daemon.js` running)
 
----
+### Step 1b: Gain tuning (if needed)
+If voice is still too quiet after the fix, increase `afe_linear_gain` in `afe_audio_engine.cc`:
+- Current: `4.0f` — moderate boost for MSM261 mic
+- Try: `8.0f` if voice peaks are still below ~5000 RMS at the AFE output
+- Try: `2.0f` if audio clips / distorts on loud speech
+- The gain only amplifies the signal before AFE noise suppression, so higher values don't increase noise
 
-### Step 3: Run the Production Validation Checklist
+### Step 2: Run production validation checklist
 
 Work through this in order:
 

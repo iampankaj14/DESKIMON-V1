@@ -109,3 +109,18 @@ Every major mistake, what caused it, and what was learned.
 **What was learned:** Never add enum values to a data-driven system without simultaneously adding the corresponding data entry. The enum and the data array must always be in sync.
 
 **Current status:** These faces are still unimplemented. Treat them as off-limits until the full cosmic face system (`spark_cosmic.c`) is completed and integrated.
+
+---
+
+## Lesson 10: Don't Pre-Filter Audio Before the AFE (2026-08-25)
+
+**What happened:** A DC-blocking IIR filter (alpha=0.995, ~10Hz cutoff) was added to `SparkAudioCodec::Read()` between the I2S driver and the ESP-SR AFE. The intent was to remove DC offset from the MSM261 MEMS mic. Instead, it corrupted the AFE's noise floor estimation. Combined with `se_init = false` (Speech Enhancement disabled) and `afe_linear_gain = 1.0f` (no amplification), the result was pure white noise in the captured audio.
+
+**Root cause:** Three compounding problems:
+1. The DC filter modified the audio spectrum before the AFE could analyze it. The AFE's WebRTC noise suppressor needs raw mic data to properly estimate and subtract the noise floor.
+2. Speech Enhancement was disabled (`se_init = false`), so even without the DC filter, no noise suppression was running.
+3. The AFE gain was 1.0x — the MSM261 mic output is inherently quiet and needs 4-8x amplification.
+
+**What was learned:** The audio codec should do minimal processing — just bit-shift conversion (`>> 14`) from 32-bit I2S to 16-bit PCM, exactly as the hardware demo does. All signal processing (DC removal, noise suppression, gain) belongs in the AFE, not in the codec. When using the ESP-SR AFE, enable `se_init` and set `afe_linear_gain` appropriately for your mic.
+
+**Fix:** Removed DC filter from Read(), enabled `se_init = true`, set `afe_linear_gain = 4.0f`.

@@ -1,0 +1,4 @@
+total_frames=256
+fps=15
+width=412
+height=412

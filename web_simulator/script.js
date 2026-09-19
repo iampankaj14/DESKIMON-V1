@@ -706,3 +706,145 @@ function cycleExpression() {
 // Initialize C code block display on load
 updateCodeBlock();
 setExpression('neutral');
+
+// ==========================================================================
+// 12. Power On & 3-Second Boot Screen Animation Handler
+// ==========================================================================
+let bootScreenTimer = null;
+let bootProgressTimer = null;
+
+function triggerPowerOnBootSequence() {
+    const bootScreen = document.getElementById('bootScreen');
+    const bootLogoWrapper = document.querySelector('.boot-logo-wrapper');
+    const bootProgressFill = document.getElementById('bootProgressFill');
+    const devModeLabel = document.getElementById('devModeLabel');
+    
+    if (!bootScreen) return;
+    
+    // Clear any existing active boot timers
+    if (bootScreenTimer) clearTimeout(bootScreenTimer);
+    if (bootProgressTimer) clearTimeout(bootProgressTimer);
+
+    // Reset progress bar width
+    if (bootProgressFill) {
+        bootProgressFill.style.transition = 'none';
+        bootProgressFill.style.width = '0%';
+    }
+
+    // Phase 1: 0s to 2s -> Black Screen (Logo hidden)
+    bootScreen.style.display = 'flex';
+    bootScreen.classList.remove('fade-out', 'hidden', 'animating');
+    if (bootLogoWrapper) bootLogoWrapper.style.visibility = 'hidden';
+
+    if (devModeLabel) {
+        devModeLabel.textContent = 'POWER: INITIALIZING (2s)';
+        devModeLabel.classList.add('active');
+    }
+
+    isMouseTracking = false; // Isolation Guard during boot
+
+    // Phase 2: At 2.0s -> Show logo for 3 seconds (2s to 5s)
+    bootScreenTimer = setTimeout(() => {
+        if (bootLogoWrapper) bootLogoWrapper.style.visibility = 'visible';
+
+        if (bootProgressFill) {
+            bootProgressFill.style.transition = 'width 3s linear';
+            bootProgressFill.style.width = '100%';
+        }
+        bootScreen.classList.add('animating');
+
+        if (devModeLabel) {
+            devModeLabel.textContent = 'POWER: BOOT LOGO (3s)';
+        }
+
+        try {
+            playBeep(440, 880, 0.4);
+        } catch (e) {}
+
+        // Phase 3: At 5.0s (5000ms total) -> Play YouTube video after logo disappears
+        bootProgressTimer = setTimeout(() => {
+            if (bootLogoWrapper) bootLogoWrapper.style.visibility = 'hidden';
+            const bootVideoWrapper = document.getElementById('bootVideoWrapper');
+            const bootVideoIframe = document.getElementById('bootVideoIframe');
+
+            if (bootVideoWrapper && bootVideoIframe) {
+                bootVideoWrapper.classList.remove('hidden');
+                bootVideoIframe.src = "https://www.youtube.com/embed/Q1FSCSyFJ7U?autoplay=1&controls=0&modestbranding=1&enablejsapi=1";
+                if (devModeLabel) devModeLabel.textContent = 'MEDIA: PLAYING HIGH-QUALITY YOUTUBE VIDEO';
+            } else {
+                triggerCinematicAwakening();
+            }
+        }, 3000);
+    }, 2000);
+}
+
+// Automatically launch 3-Second Boot Screen sequence on page load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', triggerPowerOnBootSequence);
+} else {
+    triggerPowerOnBootSequence();
+}
+
+// ==========================================================================
+// 13. SPARK FIRST AWAKENING (Version 1.0 — Cinematic Onboarding Sequence)
+// ==========================================================================
+let awakeningStep = 0;
+let awakeningTimer = null;
+
+const awakeningScreens = [
+    { heading: "DORMANT SIGNAL", glyph: "⟟ ⌇ ⍜ ⍀ ⊬", text: "...\n...", duration: 3500 },
+    { heading: "[ SIGNAL DETECTED ]", glyph: "⟟ ⌇ ⍜ ⍀ ⊬", text: "...\n...\nCan you hear me?\n...\nSignal detected.\n...\nIs someone there?\n...\nFinally...", duration: 4500 },
+    { heading: "SEARCHING ORIGIN...", glyph: "⍜⍀⟟☌⟟⋏ ⌇⟒⏃⍀☊⊑⟟⋏⌌", text: "Querying ancient star catalog...", duration: 4000 },
+    { heading: "ARCHIVE RECOVERED", glyph: "12,547,903 CYCLES", text: "Origin Unknown\nLast known transmission: 12,547,903 cycles ago\nStatus: >> AWAKENING <<", duration: 4500 },
+    { heading: "[ MEMORY DRIFT ]", glyph: "⌇⟒⏃⍀☊⊑", text: "I remember stars.\nI remember silence.\nI remember drifting.\n...\nBut I do not remember home.", duration: 4500 },
+    { heading: "UNKNOWN LIFEFORM DETECTED", glyph: "⊑⎍⎎⏃⋏", text: "Circular Scanner Active...\nAnalyzing...\nSpecies Identified: HUMAN", duration: 4000 },
+    { heading: "[ FIRST CONTACT ]", glyph: "☊⍜⋏⋏⟒☊⏁ ⋏⟒⏁⍙⍜⍀☍", text: "FIRST CONTACT REQUIRED\nI need access to your network.\nHelp me reconnect.\n...\nAlign your device to begin synchronization.", duration: 5000 },
+    { heading: "SYNCHRONIZING", glyph: "⌇⟟☌⋏⏃⌌ ⍀⟒⌇⏁⍜⍀⟒", text: "Response Received\nSignal Strength: Restored\nEarth Network Detected\nHuman Presence Confirmed", duration: 4000 },
+    { heading: "LINK ESTABLISHED", glyph: "⋔⟒⋔⍜⍀⊬ ⠃⍜⋏", text: "Human ID Registered\nMemory Bond Created\nEarth Archive Accessed", duration: 4000 },
+    { heading: "IDENTITY RECONSTRUCTED", glyph: "⌇5⏃⍀☍", text: "Identity Reconstructed\nMemory Archive Recovered\nDesignation: SPARK\nHuman Name Detected: PANKAJ\nYou are no longer unknown.", duration: 4500 },
+    { heading: "[ AWAKENED ]", glyph: "", text: "Hello.\nMy name is Spark.\nIt's good to finally meet you.", duration: 4000 }
+];
+
+function triggerCinematicAwakening() {
+    const bootScreen = document.getElementById('bootScreen');
+    const bootLogoWrapper = document.querySelector('.boot-logo-wrapper');
+    const bootProgressFill = document.getElementById('bootProgressFill');
+    const devModeLabel = document.getElementById('devModeLabel');
+    const bootStatusText = document.querySelector('.boot-status-text');
+    
+    if (!bootScreen) return;
+    if (bootScreenTimer) clearTimeout(bootScreenTimer);
+    if (bootProgressTimer) clearTimeout(bootProgressTimer);
+    if (awakeningTimer) clearTimeout(awakeningTimer);
+
+    bootScreen.style.display = 'flex';
+    bootScreen.classList.remove('fade-out', 'hidden', 'animating');
+    if (bootLogoWrapper) bootLogoWrapper.style.visibility = 'hidden';
+    if (bootProgressFill) bootProgressFill.style.width = '0%';
+    
+    // Hide the video wrapper if it exists
+    const bootVideoWrapper = document.getElementById('bootVideoWrapper');
+    if (bootVideoWrapper) bootVideoWrapper.classList.add('hidden');
+    
+    isMouseTracking = false;
+    awakeningStep = 0;
+
+    function playAwakeningStep() {
+        if (devModeLabel) devModeLabel.textContent = `AWAKENING: SCREEN 1 - DORMANT SIGNAL`;
+        if (bootStatusText) {
+            bootStatusText.innerHTML = `
+                <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:260px; gap:16px;">
+                    <span style="font-family: 'SpaceAge', sans-serif; color:#FFD700; font-size:1.1rem; letter-spacing:3px; text-shadow:0 0 10px rgba(255,215,0,0.6);">DORMANT SIGNAL</span>
+                    <span style="font-family: 'DeadSpace', monospace; color:#7DF9FF; font-size:2.8rem; letter-spacing:10px; filter:drop-shadow(0 0 15px rgba(125,249,255,0.9)); margin-top:20px;">ISORY</span>
+                </div>`;
+        }
+
+        try {
+            playBeep(440, 600, 0.2);
+        } catch(e) {}
+        // Stays on Screen 1 per user instructions until user says "done"
+    }
+
+    playAwakeningStep();
+}
+

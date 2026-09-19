@@ -90,6 +90,25 @@ Runtime flags require extra RAM and logic to manage. A compile-time define has z
 
 ---
 
+## Decision 11: Remove Pre-AFE DC Filter and Enable Speech Enhancement (2026-08-25)
+
+**Context:** The MSM261 MEMS microphone was capturing only white noise. The I2S hardware configuration was correct (matching the Waveshare demo exactly), but the audio software pipeline had three problems:
+1. A DC-blocking IIR filter in `spark_audio_codec.cc` ran *before* the AFE, interfering with the AFE's noise floor estimation
+2. `se_init = false` in `afe_audio_engine.cc` — Speech Enhancement (WebRTC noise suppression) was disabled despite comments suggesting it was active
+3. `afe_linear_gain = 1.0f` — far too low for the MSM261 mic's quiet output
+
+**Decision:** 
+- Removed the DC-blocking filter from `SparkAudioCodec::Read()`. The codec now does a clean `>> 14` bit shift (matching the Waveshare demo's `MIC_Speech.c` exactly) and passes raw PCM to the AFE.
+- Enabled `se_init = true` so the AFE's WebRTC NS handles both DC removal and noise suppression.
+- Boosted `afe_linear_gain` from `1.0f` to `4.0f` to amplify the MSM261's quiet output to a usable level before noise suppression.
+- Kept `vad_init = false` (known false trigger issue from commit 8f4559c).
+
+**Outcome:** Pending flash test. The codec path is now identical to the working Waveshare demo, and the AFE's noise suppression should clean up the MSM261's inherent noise floor.
+
+**Key files modified:** `spark_audio_codec.cc`, `spark_audio_codec.h`, `afe_audio_engine.cc`
+
+---
+
 ## Decision 7: TTS Voice Selection (AvaNeural)
 
 **Context:** The original TTS voice was a robotic multilingual neural voice at `+40%` speed. It sounded rushed and mechanical — the opposite of Spark's chill personality.

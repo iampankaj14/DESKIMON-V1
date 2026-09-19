@@ -29,6 +29,85 @@
         <section class="device-column">
             <div class="device-frame" id="deviceFrame">
                 <div class="device-screen" id="deviceScreen">
+                    <!-- Boot Screen Overlay -->
+                    <div class="boot-screen active" id="bootScreen">
+                        <div class="boot-logo-wrapper">
+                            <svg class="boot-logo-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <filter id="cyanGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                        <feGaussianBlur stdDeviation="4" result="blur1"/>
+                                        <feGaussianBlur stdDeviation="12" result="blur2"/>
+                                        <feGaussianBlur stdDeviation="25" result="blur3"/>
+                                        <feMerge>
+                                            <feMergeNode in="blur3"/>
+                                            <feMergeNode in="blur2"/>
+                                            <feMergeNode in="blur1"/>
+                                            <feMergeNode in="SourceGraphic"/>
+                                        </feMerge>
+                                    </filter>
+                                    <radialGradient id="haloGlow" cx="45%" cy="50%" r="55%">
+                                        <stop offset="0%" stop-color="#7DF9FF" stop-opacity="0.35"/>
+                                        <stop offset="45%" stop-color="#1AC8DB" stop-opacity="0.18"/>
+                                        <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+                                    </radialGradient>
+                                    <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#FFFFFF"/>
+                                        <stop offset="40%" stop-color="#A5F3FC"/>
+                                        <stop offset="100%" stop-color="#22D3EE"/>
+                                    </linearGradient>
+                                </defs>
+
+                                <circle cx="210" cy="200" r="170" fill="url(#haloGlow)"/>
+
+                                <g filter="url(#cyanGlow)">
+                                    <!-- Long Top-Left Beam & Core Sparkle (Outer Body) -->
+                                    <path d="
+                                        M 260 210
+                                        C 210 200, 120 160, 45 125
+                                        C 140 178, 205 190, 220 170
+                                        C 240 140, 255 70, 275 130
+                                        C 285 160, 305 175, 365 210
+                                        C 310 212, 285 225, 270 240
+                                        C 250 265, 240 330, 225 260
+                                        C 220 235, 200 220, 260 210 Z
+                                    " fill="#67E8F9"/>
+
+                                    <!-- Bright White Core Layer -->
+                                    <path d="
+                                        M 260 210
+                                        C 215 202, 135 166, 68 136
+                                        C 148 180, 208 191, 222 175
+                                        C 238 150, 252 90, 270 138
+                                        C 280 164, 298 177, 348 206
+                                        C 302 210, 281 221, 268 234
+                                        C 252 254, 244 310, 230 252
+                                        C 224 232, 208 219, 260 210 Z
+                                    " fill="url(#starGrad)"/>
+
+                                    <!-- Pure White Center Flare -->
+                                    <ellipse cx="250" cy="195" rx="15" ry="12" fill="#FFFFFF"/>
+
+                                    <!-- Accompanying Stars and Sparks -->
+                                    <path d="M 275 142 Q 275 152 285 152 Q 275 152 275 162 Q 275 152 265 152 Q 275 152 275 142 Z" fill="#E0F2FE"/>
+                                    <path d="M 288 122 Q 288 127 293 127 Q 288 127 288 132 Q 288 127 283 127 Q 288 127 288 122 Z" fill="#BAE6FD"/>
+                                    <path d="M 338 170 Q 338 183 351 183 Q 338 183 338 196 Q 338 183 325 183 Q 338 183 338 170 Z" fill="#E0F2FE"/>
+                                    <path d="M 308 238 Q 308 248 318 248 Q 308 248 308 258 Q 308 248 298 248 Q 308 248 308 238 Z" fill="#BAE6FD"/>
+                                    <path d="M 318 228 Q 318 232 322 232 Q 318 232 318 236 Q 318 232 314 232 Q 318 232 318 228 Z" fill="#E0F2FE"/>
+                                    <path d="M 224 212 Q 224 221 233 221 Q 224 221 224 230 Q 224 221 215 221 Q 224 221 224 212 Z" fill="#BAE6FD"/>
+                                    <circle cx="245" cy="225" r="5" fill="#7DF9FF"/>
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="boot-text-container">
+                            <span class="boot-status-text">SYSTEM POWER ON</span>
+                            <div class="boot-video-wrapper hidden" id="bootVideoWrapper">
+                                <iframe id="bootVideoIframe" class="boot-video-iframe" src="" allow="autoplay; encrypted-media" frameborder="0"></iframe>
+                            </div>
+                            <div class="boot-progress-bar">
+                                <div class="boot-progress-fill" id="bootProgressFill"></div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="dev-mode-label" id="devModeLabel">DEV: NEUTRAL</div>
                     <div class="eye-container" id="eyeContainer">
                         <!-- Left Eye Wrapper -->
@@ -89,6 +168,20 @@
 
         <!-- Section 2: Controls & Options -->
         <section class="control-column">
+            <!-- System Power & Boot Control -->
+            <div class="control-card power-card">
+                <div class="power-header">
+                    <h2>System Power Control</h2>
+                    <span class="power-badge"><span class="badge-dot"></span> 3 SEC BOOT LOGO</span>
+                </div>
+                <button class="power-boot-btn" id="btnPowerBoot" onclick="triggerPowerOnBootSequence()">
+                    <span class="btn-icon">⚡</span> Daily Boot (2s Black + 3s Logo)
+                </button>
+                <button class="power-boot-btn awakening-btn" id="btnAwakening" onclick="triggerCinematicAwakening()" style="margin-top: 10px; background: linear-gradient(135deg, #4c1d95 0%, #1e1b4b 100%); border-color: #a855f7;">
+                    <span class="btn-icon">🌌</span> SPARK FIRST AWAKENING (Onboarding)
+                </button>
+            </div>
+
             <!-- Card A: Expressions -->
             <div class="control-card">
                 <h2>Robot Expressions</h2>

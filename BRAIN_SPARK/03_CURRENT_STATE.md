@@ -11,6 +11,8 @@
 - ✅ Touch gestures: Swipe Left/Right (Blush), Up (WTF), Down (Ooh), Double Tap (Laugh), Triple Tap (Angry)
 - ✅ IMU reactions: Tilt Up → Crying, Shake → Angry
 - ✅ Face Dev Mode: `SPARK_FACE_DEV_MODE 1` — cycles all faces for hardware testing
+- ✅ Microphone I2S capture: MSM261 MEMS mic via I2S_NUM_1, 16kHz mono, `>> 14` bit conversion (clean passthrough, no pre-AFE filtering)
+- ✅ AFE audio processing: ESP-SR AFE with Speech Enhancement (WebRTC NS) enabled, 4x linear gain for MSM261 mic
 
 ### Server Daemon (`server_daemon.js`)
 - ✅ Voice endpoint: `POST /api/voice` receives WAV, returns MP3

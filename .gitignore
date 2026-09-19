@@ -11,3 +11,5 @@ dependencies.lock
 # System files
 .DS_Store
 *.bin
+
+fonts_temp/

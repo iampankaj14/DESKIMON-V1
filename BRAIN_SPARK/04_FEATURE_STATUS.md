@@ -23,7 +23,8 @@
 | SD card init | ✅ Completed | SD_MMC (in production path only) |
 | Wi-Fi provisioning | ✅ Completed | Captive portal + NVS storage |
 | Audio DAC output | ✅ Completed | PCM5101 I2S DAC, 10x volume multiplier |
-| Microphone input | ✅ Completed | I2S mic → WAV → upload |
+| Microphone input | ✅ Completed | I2S mic → clean 16-bit PCM (>> 14 shift, no pre-AFE filter) |
+| AFE noise suppression | ✅ Completed | se_init=true, afe_linear_gain=4.0, WebRTC NS active |
 | Face Dev Mode | ✅ Completed | `#define SPARK_FACE_DEV_MODE 1` |
 
 ---
